@@ -120,6 +120,7 @@ interface ArticleWriterProps {
     keyword: string;
     autoMode?: boolean;
   }) => void; // 画像生成エージェントをiframeで開く
+  referenceMaterialContext?: string; // 参考資料テキスト（任意）
 }
 
 const ArticleWriter: React.FC<ArticleWriterProps> = ({
@@ -135,6 +136,7 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
   onAutoRevisionStart,
   skipAutoGenerate = false,
   onOpenImageAgent,
+  referenceMaterialContext,
 }) => {
   // デバッグ：受け取ったデータを確認
   console.log("ArticleWriter received:", {
@@ -220,7 +222,7 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
 
   // レギュレーション設定（今後カスタマイズ可能）
   const [regulation] = useState<WritingRegulationV2>({
-    enableInternalLinks: false,
+    enableInternalLinks: true,
     // internalLinkBaseUrl: 'https://example.com',
     // Ver.2用の設定
     enableInstructionTags: writingMode === "v2",
@@ -270,6 +272,7 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
           targetAudience: actualOutline.targetAudience,
           tone: "professional",
           useGrounding: true, // Grounding機能有効（最新情報を検索しながら執筆）
+          referenceMaterialContext: referenceMaterialContext,
         });
 
         // 一時的に保存（チェック後にクリーンアップするため）

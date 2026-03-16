@@ -281,6 +281,68 @@ Background Suggestion:`;
   });
 };
 
+/**
+ * H2見出し・段落テキストから、写真撮影指示書（英語）を自動生成する。
+ * Gemini テキストモデルが「プロの商業カメラマン」として
+ * カメラ・レンズ・照明・構図を含む具体的な撮影ディレクションを出力する。
+ *
+ * 生成されたプロンプトはそのまま gemini-3-pro-image-preview に渡して画像生成に使う。
+ */
+export const generatePhotographyPrompt = async (
+  h2Text: string,
+  paragraphText: string
+): Promise<string> => {
+  return retryWithExponentialBackoff(async () => {
+    const systemPrompt = `You are a professional commercial photographer specializing in Japanese corporate and editorial photography.
+
+Your task: Given a heading and paragraph from a Japanese business article, create a detailed PHOTOGRAPHY DIRECTION in English (max 200 words) that will be used to generate a photorealistic image.
+
+REQUIREMENTS — always include ALL of these:
+1. SUBJECT: Concrete description of people (number, gender, clothing, action), objects, or scene. For people, specify Japanese individuals.
+2. CAMERA: Choose one — Sony α7IV, Canon EOS R5, or Fujifilm X-T5
+3. LENS: Focal length and aperture (e.g. "35mm f/1.8", "85mm f/1.4", "24-70mm f/2.8")
+4. LIGHTING: MUST be bright and well-lit. Use abundant natural daylight (large window light, clear sunny day, bright overcast). For indoor scenes use bright fluorescent office lighting or large windows letting in plenty of light. NEVER use dim, moody, or low-key lighting.
+5. COMPOSITION: Angle (eye-level, slightly above, low angle), framing, depth of field
+6. ATMOSPHERE: bright, clean, professional — like a Japanese stock photo
+7. SETTING: Specific Japanese location or interior (modern bright Tokyo office, clean apartment building under blue sky, etc.)
+
+CONSTRAINTS:
+- Output ONLY the photography direction. No explanations, no headers, no bullet points.
+- Write as a single flowing paragraph of natural English.
+- NO text, logos, watermarks, or UI elements in the image.
+- The scene must look like a real photograph taken in Japan.
+- Avoid overly perfect or symmetrical compositions — add slight natural imperfection.
+- The overall image must be BRIGHT and WELL-LIT with clean, natural colors. Think Japanese stock photography tone — warm, inviting. Preserve highlight detail and avoid blown-out whites.
+- For outdoor scenes, always use clear blue sky or bright daylight, NEVER overcast or cloudy.
+- White balance should be neutral to slightly warm.
+
+Heading: "${h2Text}"
+Paragraph: "${paragraphText}"
+
+Photography Direction:`;
+
+    const ai = getNextAIClient();
+    const response = await ai.models.generateContent({
+      model: "gemini-3-pro-image-preview",
+      contents: systemPrompt,
+    });
+
+    var result = response.text.trim();
+
+    // 万一マークダウンやヘッダが混入した場合は除去
+    result = result.replace(/^#+\s.*/gm, "").trim();
+    result = result.replace(/^\*\*.*/gm, "").trim();
+    result = result.replace(/^-\s.*/gm, "").trim();
+
+    console.log("📸 写真プロンプト生成完了 (" + result.length + " chars)");
+    return result;
+  }).catch((error: any) => {
+    console.error("Error generating photography prompt after retries:", error);
+    // フォールバック: 汎用的な写真プロンプト
+    return "A bright, well-lit editorial photograph of Japanese business professionals in a modern Tokyo office with large windows, shot on Sony α7IV with 35mm f/1.8 lens, abundant natural daylight streaming in, slight bokeh in background, clean warm color palette, high-key exposure, no text or logos.";
+  });
+};
+
 export const summarizeText = async (text: string): Promise<string> => {
   return retryWithExponentialBackoff(async () => {
     const ai = getNextAIClient();

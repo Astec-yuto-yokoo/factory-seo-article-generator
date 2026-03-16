@@ -153,12 +153,14 @@ const authenticate = (req, res, next) => {
 app.use("/api", authenticate);
 app.use("/api", apiLimiter);
 
-// Google Search API設定
+// Google / Serper Search API設定
 const GOOGLE_API_KEY =
   process.env.GOOGLE_API_KEY || process.env.VITE_GOOGLE_API_KEY;
 const SEARCH_ENGINE_ID =
   process.env.GOOGLE_SEARCH_ENGINE_ID ||
   process.env.VITE_GOOGLE_SEARCH_ENGINE_ID;
+const SERPER_API_KEY =
+  process.env.SERPER_API_KEY || process.env.VITE_SERPER_API_KEY;
 
 // ブラウザインスタンスを保持（高速化のため）
 let browser = null;
@@ -297,6 +299,7 @@ async function initBrowser() {
       }
     }
   }
+
   return browser;
 }
 
@@ -867,7 +870,7 @@ app.post("/api/force-restart-browser", async (req, res) => {
   });
 });
 
-// Google Search APIエンドポイント
+// Google / Serper Search APIエンドポイント
 app.post("/api/google-search", async (req, res) => {
   const { query, numResults = 20 } = req.body;
 
@@ -875,6 +878,72 @@ app.post("/api/google-search", async (req, res) => {
     return res.status(400).json({ error: "Query is required" });
   }
 
+  // 1. Serperが設定されている場合はSerperを優先的に使用
+  if (SERPER_API_KEY) {
+    try {
+      console.log(`🔍 Serper Search for: ${query}`);
+
+      const serperResponse = await fetch("https://google.serper.dev/search", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-KEY": SERPER_API_KEY,
+        },
+        body: JSON.stringify({
+          q: query,
+          num: Math.min(numResults, 20),
+          gl: "jp",
+          hl: "ja",
+        }),
+      });
+
+      if (!serperResponse.ok) {
+        const errorText = await serperResponse.text();
+        console.error("Serper API error:", serperResponse.status, errorText);
+        return res.status(serperResponse.status).json({
+          error:
+            process.env.NODE_ENV === "production"
+              ? "Search service error"
+              : "Serper API error: " + errorText,
+        });
+      }
+
+      const serperData = await serperResponse.json();
+      const organicResults = serperData && serperData.organic
+        ? serperData.organic
+        : [];
+
+      const results = organicResults.slice(0, numResults).map((item) => {
+        let displayLink = "";
+        try {
+          const parsedUrl = new URL(item.link);
+          displayLink = parsedUrl.hostname;
+        } catch (e) {
+          displayLink = "";
+        }
+
+        return {
+          title: item.title,
+          link: item.link,
+          snippet: item.snippet || "",
+          displayLink: displayLink,
+        };
+      });
+
+      console.log(`✅ Serper Search completed: ${results.length} results`);
+      return res.json({ success: true, results });
+    } catch (error) {
+      console.error("Serper Search error:", error && error.message ? error.message : error);
+      return res.status(500).json({
+        error:
+          process.env.NODE_ENV === "production"
+            ? "Internal server error"
+            : "Failed to perform Serper search",
+      });
+    }
+  }
+
+  // 2. Serperが未設定の場合は従来どおりGoogle Custom Search APIを使用
   if (!GOOGLE_API_KEY || !SEARCH_ENGINE_ID) {
     console.error("Google Search API keys not configured");
     return res.status(500).json({ error: "Google Search API not configured" });
@@ -898,7 +967,9 @@ app.post("/api/google-search", async (req, res) => {
         error:
           process.env.NODE_ENV === "production"
             ? "Search service error"
-            : errorData.error?.message || "Google Search API error",
+            : (errorData.error && errorData.error.message)
+              ? errorData.error.message
+              : "Google Search API error",
       });
     }
 
@@ -908,7 +979,7 @@ app.post("/api/google-search", async (req, res) => {
     }
 
     // 20件必要な場合は2回目のリクエスト（11-20位）
-    if (numResults > 10 && firstData.items?.length === 10) {
+    if (numResults > 10 && firstData.items && firstData.items.length === 10) {
       const secondUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${SEARCH_ENGINE_ID}&q=${encodeURIComponent(
         query
       )}&num=10&start=11&lr=lang_ja&gl=jp`;
@@ -923,10 +994,13 @@ app.post("/api/google-search", async (req, res) => {
     }
 
     console.log(`✅ Google Search completed: ${results.length} results`);
-    res.json({ success: true, results });
+    return res.json({ success: true, results });
   } catch (error) {
-    console.error("Google Search error:", error.message);
-    res.status(500).json({
+    console.error(
+      "Google Search error:",
+      error && error.message ? error.message : error
+    );
+    return res.status(500).json({
       error:
         process.env.NODE_ENV === "production"
           ? "Internal server error"
@@ -948,6 +1022,21 @@ const { updateSpreadsheetCell } = require("./api/spreadsheet-update.js");
 app.get("/api/spreadsheet-mode/keywords", getMarkedKeywords);
 app.get("/api/spreadsheet-mode/internal-links", getInternalLinkMap);
 app.post("/api/spreadsheet-mode/update", updateSpreadsheetCell);
+
+// 参考資料（独自情報ソース）APIエンドポイント
+const {
+  getMulterUpload,
+  handleUpload,
+  handleList,
+  handleGetExtracted,
+  handleDelete,
+} = require("./api/reference-materials.js");
+app.post("/api/reference-materials/upload", getMulterUpload().single("file"), handleUpload);
+app.get("/api/reference-materials", handleList);
+app.get("/api/reference-materials/:id", handleGetExtracted);
+app.delete("/api/reference-materials/:id", handleDelete);
+
+// リンクチェック・出典検証機能は撤去済み（出典はテキストのみ、リンクなし）
 
 // Slack通知プロキシエンドポイント（CORSを回避）
 app.post("/api/slack-notify", async (req, res) => {
@@ -1317,13 +1406,16 @@ const server = app.listen(PORT, "0.0.0.0", () => {
    - GET /api/health (ヘルスチェック)
   `);
 
-  // Google Search API設定の確認（APIキーはマスク）
-  if (GOOGLE_API_KEY && SEARCH_ENGINE_ID) {
+  // Search API設定の確認（APIキーはマスク）
+  if (SERPER_API_KEY) {
+    console.log("✅ Serper Search API: 設定済み");
+  } else if (GOOGLE_API_KEY && SEARCH_ENGINE_ID) {
     console.log("✅ Google Custom Search API: 設定済み");
     console.log("   - API Key: ****");
     console.log(`   - Search Engine ID: ${SEARCH_ENGINE_ID}`);
   } else {
-    console.log("⚠️  Google Custom Search API: 未設定");
+    console.log("⚠️  検索API: 未設定");
+    if (!SERPER_API_KEY) console.log("   - SERPER_API_KEY が見つかりません");
     if (!GOOGLE_API_KEY) console.log("   - GOOGLE_API_KEY が見つかりません");
     if (!SEARCH_ENGINE_ID)
       console.log("   - GOOGLE_SEARCH_ENGINE_ID が見つかりません");

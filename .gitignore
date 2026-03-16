@@ -38,3 +38,9 @@ dist-ssr
 *.sln
 *.sw?
 data/*-backup.json
+
+# Reference materials (uploaded files and extracted text)
+data/reference-materials/files/
+data/reference-materials/extracted/
+*.traineddata
+.claude/settings.local.json

@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import type { SeoOutline } from "../types";
+import { generateFaqSchemaFromArticle } from "../utils/faqSchemaGenerator";
 
 interface ArticleDisplayProps {
   article: {
@@ -29,9 +30,17 @@ const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview");
   const [copyButtonText, setCopyButtonText] = useState("HTMLコピー");
 
+  // FAQPage JSON-LD を生成
+  var faqJsonLd = useMemo(function () {
+    return generateFaqSchemaFromArticle(article.htmlContent);
+  }, [article.htmlContent]);
+
   const handleCopyHtml = () => {
+    var htmlWithSchema = faqJsonLd
+      ? article.htmlContent + "\n\n" + faqJsonLd
+      : article.htmlContent;
     navigator.clipboard
-      .writeText(article.htmlContent)
+      .writeText(htmlWithSchema)
       .then(() => {
         setCopyButtonText("コピーしました！");
         setTimeout(() => {
@@ -141,7 +150,9 @@ ${article.plainText}`;
     strong, b { color: #1e3a8a; font-weight: bold; }
     ul, ol { margin: 20px 0; padding-left: 30px; }
     li { margin: 8px 0; }
+    .source-citation { font-size: 0.85em; color: #666; margin-top: 4px; margin-bottom: 16px; }
   </style>
+  ${faqJsonLd}
 </head>
 <body>
   <h1>${article.title}</h1>
@@ -263,16 +274,47 @@ ${article.plainText}`;
         </div>
       </div>
 
+      {/* FAQPage JSON-LD */}
+      {faqJsonLd && (
+        <div className="bg-green-50 p-4 rounded-xl border border-green-200 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-green-800 flex items-center gap-2">
+              <span>{"✅"}</span>
+              FAQPage 構造化データ（JSON-LD）
+            </h3>
+            <button
+              onClick={function () {
+                navigator.clipboard.writeText(faqJsonLd).then(function () {
+                  alert("JSON-LDをコピーしました");
+                });
+              }}
+              className="px-3 py-1 text-xs bg-green-100 hover:bg-green-200 text-green-700 rounded-lg transition-colors border border-green-300"
+            >
+              コピー
+            </button>
+          </div>
+          <p className="text-xs text-green-600 mb-2">
+            HTMLコピー・HTML DLに自動で含まれます。WordPressのカスタムHTMLブロックに貼り付けても使えます。
+          </p>
+          <pre className="bg-white text-xs text-gray-700 p-3 rounded-lg overflow-auto max-h-40 border border-green-200">
+            <code>{faqJsonLd}</code>
+          </pre>
+        </div>
+      )}
+
       {/* コンテンツエリア */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         {viewMode === "preview" ? (
           // プレビューモード
           <div className="bg-white rounded-lg p-8 text-gray-900">
+            <style dangerouslySetInnerHTML={{ __html: `
+              .article-content .source-citation { font-size: 0.85em; color: #6b7280; margin-top: 4px; margin-bottom: 16px; }
+            `}} />
             <h1 className="text-3xl font-bold mb-6 pb-4 border-b-2 border-blue-600">
               {article.title}
             </h1>
             <div
-              className="prose prose-lg max-w-none
+              className="prose prose-lg max-w-none article-content
                 prose-h2:text-2xl prose-h2:font-bold prose-h2:text-blue-900 prose-h2:mt-8 prose-h2:mb-4 prose-h2:pb-2 prose-h2:border-b-2 prose-h2:border-blue-200
                 prose-h3:text-xl prose-h3:font-bold prose-h3:text-blue-700 prose-h3:mt-6 prose-h3:mb-3
                 prose-p:text-gray-700 prose-p:leading-relaxed

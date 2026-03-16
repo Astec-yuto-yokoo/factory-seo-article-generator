@@ -119,6 +119,33 @@ output_format:
 }
 
 /**
+ * 写真プロンプト（Gemini生成済み）を画像生成用の最終プロンプトに整形する。
+ * カメラ情報・照明・構図を含む撮影指示書に、制約事項を付加して返す。
+ */
+export function wrapPhotographyPrompt(photographyDirection: string): string {
+  return `# Photorealistic Image Generation
+
+${photographyDirection}
+
+Technical requirements:
+- Aspect ratio: 16:9 widescreen landscape
+- Resolution: high quality
+- Style: photorealistic editorial photograph, NOT illustration or CGI
+
+Absolute restrictions — do NOT include any of the following:
+- Text, letters, alphabets, numbers, or characters of any kind
+- Logos, brand marks, watermarks, or signatures
+- UI elements, overlays, or borders
+
+Color and tone:
+- Well-lit and bright, but preserve highlight detail — avoid blown-out whites or overexposure
+- Clean, natural color palette with neutral to slightly warm white balance
+- Similar tone to Japanese stock photography (e.g. PIXTA, photo-ac): bright daylight, clear colors, professional warmth
+- Avoid dark, moody, underexposed, or desaturated looks
+- Avoid oversaturated, HDR-like, or overly contrasty processing`;
+}
+
+/**
  * 従来の日本語プロンプトから英語YAMLプロンプトへの変換
  */
 export function convertJapaneseToEnglishYAML(japanesePrompt: string): string {

@@ -1,7 +1,5 @@
 /**
- * 企業マスターデータ（汎用スタブ版）
- *
- * 既存のインポートとの互換性を維持するための空実装
+ * 企業マスターデータ
  */
 
 export interface CompanyInfo {
@@ -20,33 +18,64 @@ export interface CompanyInfo {
   noteUrl: string;
 }
 
-// 空のマスターデータ
-export const COMPANY_MASTER: Record<string, CompanyInfo> = {};
+// 実データをここに登録
+export const COMPANY_MASTER: Record<string, CompanyInfo> = {
+  'アステックペイント': {
+    fullName: '株式会社アステックペイント',
+    displayName: 'アステックペイント',
+    industry: 'アパート・マンション修繕',
+    ceo: '',
+    results: {
+      before: '',
+      after: '',
+      improvement: '累計施工棟数30万棟以上'
+    },
+    details:
+      '遮熱塗料シェアNo.1の技術力と豊富な施工ノウハウを持つアステックペイントが運営',
+    noteUrl: ''
+  }
+};
 
 /**
- * 企業名から業界情報を取得（汎用スタブ）
+ * 企業名から業界情報を取得
  */
-export function getCompanyIndustry(companyName: string): string | undefined {
-  return undefined;
+export function getCompanyIndustry(
+  companyName: string
+): string | undefined {
+  return COMPANY_MASTER[companyName]?.industry;
 }
 
 /**
- * 企業名から完全な情報を取得（汎用スタブ）
+ * 企業名から完全な情報を取得
  */
-export function getCompanyInfo(companyName: string): CompanyInfo | undefined {
-  return undefined;
+export function getCompanyInfo(
+  companyName: string
+): CompanyInfo | undefined {
+  return COMPANY_MASTER[companyName];
 }
 
 /**
- * すべての企業情報を取得（汎用スタブ）
+ * すべての企業情報を取得
  */
 export function getAllCompanies(): CompanyInfo[] {
-  return [];
+  return Object.values(COMPANY_MASTER);
 }
 
 /**
- * 実績データをマークダウン形式で取得（汎用スタブ）
+ * 実績データをマークダウン形式で取得
  */
-export function formatCompanyResultAsMarkdown(companyName: string): string | null {
-  return null;
+export function formatCompanyResultAsMarkdown(
+  companyName: string
+): string | null {
+  const company = COMPANY_MASTER[companyName];
+  if (!company) return null;
+
+  return `
+## ${company.displayName}の実績
+
+- 業界：${company.industry}
+- 実績：${company.results.improvement ?? ''}
+
+${company.details}
+`.trim();
 }

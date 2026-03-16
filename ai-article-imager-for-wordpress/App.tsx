@@ -61,7 +61,7 @@ const App: React.FC<AppProps> = ({ initialArticleData }) => {
       "draft",
   });
   const [promptStyle, setPromptStyle] = useState<string>(
-    "Simple and clean illustration style"
+    "Photorealistic editorial photography"
   );
 
   // WordPress設定をサーバーから取得
@@ -107,15 +107,20 @@ const App: React.FC<AppProps> = ({ initialArticleData }) => {
     fetchWpConfig();
   }, []);
 
-  // localStorageから記事データを取得
+  // localStorageから記事データを取得（パース失敗時はクラッシュ防止）
   const storedArticleData =
     typeof window !== "undefined"
       ? localStorage.getItem("articleDataForImageGen_5176") ||
         localStorage.getItem("articleDataForImageGen")
       : null;
-  const articleDataFromStorage = storedArticleData
-    ? JSON.parse(storedArticleData)
-    : null;
+  let articleDataFromStorage: { htmlContent?: string; title?: string; metaDescription?: string; slug?: string; keyword?: string } | null = null;
+  if (storedArticleData) {
+    try {
+      articleDataFromStorage = JSON.parse(storedArticleData);
+    } catch (e) {
+      console.warn("⚠️ localStorageの記事データのパースに失敗しました（無視して続行）:", e);
+    }
+  }
 
   const [articleHtml, setArticleHtml] = useState<string | null>(
     initialArticleData?.htmlContent ||

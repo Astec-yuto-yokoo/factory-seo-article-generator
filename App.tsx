@@ -24,6 +24,9 @@ import LoadingSpinner from "./components/LoadingSpinner";
 import ErrorMessage from "./components/ErrorMessage";
 import { LogoIcon, SparklesIcon } from "./components/icons";
 import TextCheckPage from "./components/TextCheckPage";
+import ReferenceMaterialManager from "./components/ReferenceMaterialManager";
+import ReferenceMaterialSelector from "./components/ReferenceMaterialSelector";
+import { buildPromptContext, analyzeForArticle } from "./services/referenceMaterialService";
 import AutoProgressDisplay, {
   type AutoStep,
 } from "./components/AutoProgressDisplay";
@@ -48,8 +51,12 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<
-    "research" | "frequency" | "outline" | "article"
+    "research" | "frequency" | "outline" | "article" | "references"
   >("research");
+
+  // 参考資料の選択状態
+  const [selectedRefMaterialIds, setSelectedRefMaterialIds] = useState<string[]>([]);
+  const [refMaterialContext, setRefMaterialContext] = useState<string>("");
   const [analysisProgress, setAnalysisProgress] = useState<{
     current: number;
     total: number;
@@ -496,13 +503,27 @@ const App: React.FC = () => {
         // API使用回数をインクリメント（成功時のみ）
         incrementApiUsage();
 
+        // 参考資料のAI分析（E-E-A-T強化用）
+        let refContext = "";
+        if (selectedRefMaterialIds.length > 0) {
+          try {
+            console.log("🔬 参考資料をAI分析中（E-E-A-T強化）...");
+            refContext = await analyzeForArticle(selectedRefMaterialIds, newKeyword);
+            setRefMaterialContext(refContext);
+            console.log("✅ 参考資料AI分析完了:", refContext.length, "文字");
+          } catch (err) {
+            console.error("⚠️ 参考資料AI分析失敗:", err);
+          }
+        }
+
         // Ver.2構成案を生成
         console.log("Generating SEO outline Ver.2...");
         const v2Outline = await generateOutlineV2(
           newKeyword,
           researchResult,
           includeImages,
-          true // 導入文2パターン生成
+          true, // 導入文2パターン生成
+          refContext || undefined // 参考資料テキスト
         );
 
         // 構成チェックと自動修正
@@ -674,11 +695,24 @@ const App: React.FC = () => {
         // 構成生成の開始時間を記録
         await slackNotifier.notifyStepStart("outline");
 
+        // 参考資料のAI分析（フル自動モード・E-E-A-T強化用）
+        let autoRefContext = "";
+        if (selectedRefMaterialIds.length > 0) {
+          try {
+            console.log("🔬 参考資料をAI分析中（フル自動・E-E-A-T強化）...");
+            autoRefContext = await analyzeForArticle(selectedRefMaterialIds, newKeyword);
+            setRefMaterialContext(autoRefContext);
+          } catch (err) {
+            console.error("⚠️ 参考資料AI分析失敗:", err);
+          }
+        }
+
         const v2Outline = await generateOutlineV2(
           newKeyword,
           researchResult,
           includeImages,
-          true
+          true,
+          autoRefContext || undefined // 参考資料テキスト
         );
 
         // v2Outlineの構造を確認
@@ -1607,6 +1641,21 @@ const App: React.FC = () => {
                     記事本文
                   </button>
                 )}
+                <button
+                  onClick={() => setActiveTab("references")}
+                  className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
+                    activeTab === "references"
+                      ? "bg-amber-500 text-white shadow-md"
+                      : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
+                  }`}
+                >
+                  参考資料
+                  {selectedRefMaterialIds.length > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 text-xs bg-amber-600 text-white rounded-full">
+                      {selectedRefMaterialIds.length}
+                    </span>
+                  )}
+                </button>
               </div>
             )}
 
@@ -1624,8 +1673,18 @@ const App: React.FC = () => {
                 />
               )}
 
+            {activeTab === "references" && !isLoading && (
+              <ReferenceMaterialManager />
+            )}
+
             {activeTab === "outline" && !isLoading && (
               <>
+                {/* 参考資料選択ウィジェット */}
+                <ReferenceMaterialSelector
+                  selectedIds={selectedRefMaterialIds}
+                  onSelectionChange={setSelectedRefMaterialIds}
+                />
+
                 {/* Ver.2の構成案表示 */}
                 {outlineV2 && isV2Mode && (
                   <OutlineDisplayV2
@@ -1689,7 +1748,7 @@ const App: React.FC = () => {
               />
             )}
 
-            {!isLoading && !error && !outline && !competitorResearch && (
+            {!isLoading && !error && !outline && !competitorResearch && !outlineV2 && activeTab !== "references" && (
               <div className="text-center py-16 px-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
                 <SparklesIcon className="mx-auto h-12 w-12 text-gray-400" />
                 <h3 className="mt-4 text-xl font-semibold text-gray-700">
@@ -1701,8 +1760,15 @@ const App: React.FC = () => {
                 <p className="mt-2 text-sm text-blue-500">
                   上位15サイトを分析し、最適な記事構成を提案します。
                 </p>
+                <button
+                  onClick={() => setActiveTab("references")}
+                  className="mt-4 text-sm text-amber-600 hover:text-amber-700 underline"
+                >
+                  参考資料を管理する
+                </button>
               </div>
             )}
+
           </div>
         </div>
       </main>
@@ -1721,6 +1787,7 @@ const App: React.FC = () => {
             revisionTestMode={false} // 修正サービステストモード無効化
             isAutoMode={autoArticleWriter} // フル自動モードフラグ
             skipAutoGenerate={showArticleWriter && generatedArticle !== null} // 編集再開時は自動生成をスキップ
+            referenceMaterialContext={refMaterialContext || undefined}
             onOpenImageAgent={openImageAgentInIframe}
             onClose={() => {
               setShowArticleWriter(false);

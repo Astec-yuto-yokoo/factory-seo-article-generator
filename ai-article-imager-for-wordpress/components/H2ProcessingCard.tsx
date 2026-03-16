@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { H2Section } from '../types';
-import { generateImage, generateBackgroundInstruction } from '../services/geminiService';
-import { ensure16x9 } from '../services/imageProcessor';
+import { generateImage, generatePhotographyPrompt } from '../services/geminiService';
+import { ensure16x9, applyPhotoPostProcessing } from '../services/imageProcessor';
+import { wrapPhotographyPrompt } from '../utils/promptHelper';
 
 interface H2ProcessingCardProps {
     section: H2Section;
@@ -29,48 +30,55 @@ export const H2ProcessingCard: React.FC<H2ProcessingCardProps> = ({ section, upd
 
         try {
             let currentPrompt = editablePrompt;
-            let finalBgInstruction = section.backgroundInstruction;
+            let photographyDirection = section.backgroundInstruction || "";
 
             if (isFirstGeneration) {
-                updateSection({ ...section, status: 'generating', generationStep: 'Generating background suggestion...' });
+                // Step 1: Gemini テキストモデルで写真撮影指示書を生成
+                updateSection({ ...section, status: 'generating', generationStep: '📸 写真プロンプトを生成中...' });
                 try {
-                    finalBgInstruction = await generateBackgroundInstruction(section.h2Text, section.paragraphText);
-                    currentPrompt = `${editablePrompt}\n- **背景の指定:** ${finalBgInstruction}`;
+                    photographyDirection = await generatePhotographyPrompt(section.h2Text, section.paragraphText);
+                    currentPrompt = wrapPhotographyPrompt(photographyDirection);
                     setEditablePrompt(currentPrompt);
                 } catch (error) {
-                    console.error("Failed to generate background", error);
+                    console.error("Failed to generate photography prompt", error);
+                    // フォールバック: 既存のプロンプトをそのまま使用
                 }
             }
 
-            // 画像生成（1回のみ、テキスト検出・除去なし）
+            // Step 2: 撮影指示書で画像を生成
             updateSection({
                 ...section,
                 status: 'generating',
                 prompt: currentPrompt,
-                backgroundInstruction: finalBgInstruction,
-                generationStep: 'Generating image...'
+                backgroundInstruction: photographyDirection,
+                generationStep: '🎨 画像を生成中...'
             });
 
             const generatedImgB64 = await generateImage(section.baseImage, currentPrompt);
 
-            console.log(`✅ 画像生成完了 [H2 #${section.id}]`, {
+            console.log("✅ 画像生成完了 [H2 #" + section.id + "]", {
                 h2Text: section.h2Text,
                 timestamp: new Date().toISOString()
             });
 
-            updateSection({ ...section, status: 'generating', generationStep: 'Finalizing image format...' });
-            const finalImage = await ensure16x9(generatedImgB64, 1920, 1080);
-            
+            // Step 3: 後処理（グレイン・ビネット・色補正）
+            updateSection({ ...section, status: 'generating', generationStep: '🎞️ 写真フィルタを適用中...' });
+            const postProcessed = await applyPhotoPostProcessing(generatedImgB64);
+
+            // Step 4: 16:9 クロップ
+            updateSection({ ...section, status: 'generating', generationStep: '📐 16:9にリサイズ中...' });
+            const finalImage = await ensure16x9(postProcessed, 1920, 1080);
+
             const simulatedMediaId = Math.floor(Math.random() * 1000) + 1;
-            const simulatedUrl = `https://your-site.com/wp-content/uploads/2024/h2_${section.id}.jpg`;
-            
-            updateSection({ 
-                ...section, 
+            const simulatedUrl = "https://your-site.com/wp-content/uploads/2024/h2_" + section.id + ".jpg";
+
+            updateSection({
+                ...section,
                 prompt: currentPrompt,
-                backgroundInstruction: finalBgInstruction,
-                status: 'success', 
-                generatedImage: finalImage, 
-                mediaId: simulatedMediaId, 
+                backgroundInstruction: photographyDirection,
+                status: 'success',
+                generatedImage: finalImage,
+                mediaId: simulatedMediaId,
                 sourceUrl: simulatedUrl,
                 generationStep: null,
                 errorMessage: null,
@@ -177,12 +185,12 @@ export const H2ProcessingCard: React.FC<H2ProcessingCardProps> = ({ section, upd
                                 )}
                             </div>
                             <div>
-                                <p className="font-medium text-gray-600">AI Background Suggestion:</p>
+                                <p className="font-medium text-gray-600">📸 Photography Direction:</p>
                                 <div className="mt-1 p-2 bg-gray-50 rounded-md min-h-[40px] flex items-center">
                                     {section.status === 'pending' && <span className="text-gray-400 italic">Will be generated automatically...</span>}
-                                    {section.status === 'generating' && !section.backgroundInstruction && <span className="text-blue-600 animate-pulse">Thinking of a background...</span>}
-                                    {section.backgroundInstruction && <span className="text-gray-800">{section.backgroundInstruction}</span>}
-                                    {section.status === 'error' && !section.backgroundInstruction && <span className="text-red-500">Could not generate suggestion.</span>}
+                                    {section.status === 'generating' && !section.backgroundInstruction && <span className="text-blue-600 animate-pulse">Generating photography direction...</span>}
+                                    {section.backgroundInstruction && <span className="text-gray-800 text-xs leading-relaxed">{section.backgroundInstruction}</span>}
+                                    {section.status === 'error' && !section.backgroundInstruction && <span className="text-red-500">Could not generate direction.</span>}
                                 </div>
                             </div>
                              <div className="bg-gray-50 p-3 rounded-md">

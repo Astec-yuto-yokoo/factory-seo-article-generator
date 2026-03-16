@@ -274,6 +274,17 @@ JSON形式で返してください（必ず15件以上）：
     // Step 3: スクレイピング方法を選択
     let pageAnalyses: PageAnalysis[] = [];
 
+    // WebFetch（Gemini）フォールバック関数
+    async function runWebFetchFallback(): Promise<void> {
+      console.log(
+        "\n🧪 Falling back to Gemini WebFetch for page content analysis..."
+      );
+      pageAnalyses = await fetchMultiplePages(pagesToFetch, onProgress);
+      console.log(
+        `✅ WebFetch fallback completed: ${pageAnalyses.length} pages analyzed`
+      );
+    }
+
     // Puppeteerサーバーが利用可能かチェック
     const puppeteerAvailable = await checkScrapingServerHealth();
 
@@ -320,36 +331,23 @@ JSON形式で返してください（必ず15件以上）：
           onProgress(urlsToScrape.length, urlsToScrape.length);
         }
 
-        // 成功したページが0の場合
+        // 成功したページが0の場合はWebFetchにフォールバック
         const successCount = pageAnalyses.filter((p) => p.fetchSuccess).length;
         if (successCount === 0) {
           console.error("⚠️ Puppeteerで全てのページの取得に失敗しました");
-          console.error("🔧 対処法:");
-          console.error(
-            "   1. スクレイピングサーバーが起動しているか確認（npm run server）"
-          );
-          console.error("   2. ネットワーク接続を確認");
-          console.error("   3. 対象サイトがアクセス可能か確認");
-
-          // エラーを投げて処理を停止
-          throw new Error(
-            "Puppeteerによるページ取得に失敗しました。上記の対処法を確認してください。"
-          );
+          await runWebFetchFallback();
         }
       } catch (error) {
         console.error("❌ Puppeteer error:", error);
-        console.error("🔧 対処法:");
-        console.error("   1. スクレイピングサーバーを再起動: npm run server");
-        console.error("   2. エラーメッセージを確認: ", error.message);
-
-        // エラーを再投げして、上位で適切に処理させる
-        throw error;
+        console.error("🔧 Puppeteerに失敗したため、WebFetchにフォールバックします");
+        await runWebFetchFallback();
       }
     } else {
-      // Puppeteerが利用できない場合はエラー
-      throw new Error(
-        "スクレイピングサービスが利用できません。サーバーを起動してください（cd server && node scraping-server.js）"
+      // Puppeteerが利用できない場合は最初からWebFetchを使用
+      console.log(
+        "⚠️ Puppeteerが利用できないため、Gemini WebFetchでページコンテンツを取得します"
       );
+      await runWebFetchFallback();
     }
 
     // Step 4: 結果を整形
