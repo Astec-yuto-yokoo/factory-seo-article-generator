@@ -921,6 +921,9 @@ ${
       const response = result.response;
       var text = response.text();
 
+      // 出典テキストをGoogle検索してURLリンクを後付け挿入
+      text = await searchAndInsertCitationLinks(text);
+
       const generationTime = (
         (Date.now() - generationStartTime) /
         1000
@@ -1018,7 +1021,10 @@ ${request.keyword}
 
     console.log("🔄 セクション執筆中...");
     const result = await model.generateContent(prompt);
-    const text = result.response.text();
+    let text = result.response.text();
+
+    // 出典テキストをGoogle検索してURLリンクを後付け挿入
+    text = await searchAndInsertCitationLinks(text);
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`✅ セクション執筆完了: ${sectionName} (${elapsed}秒)`);
@@ -1028,6 +1034,134 @@ ${request.keyword}
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.error(`❌ セクション執筆エラー (${elapsed}秒後):`, error);
     throw error;
+  }
+}
+
+// ===== 出典URL検索・リンク挿入機能（Google Custom Search API方式） =====
+
+import { searchGoogle } from "./googleSearchService";
+
+/**
+ * 記事本文中の出典テキストをGoogle検索し、検索結果1位のURLでリンクを挿入する。
+ *
+ * 処理フロー:
+ * 1. 記事HTMLから出典タグを全件抽出
+ * 2. 各出典テキストでGoogle Custom Search APIを呼び出し
+ * 3. 検索結果1位のURLを取得
+ * 4. 出典テキスト全体を <a href="URL"> で囲む
+ * 5. 検索結果0件 or APIエラー時はテキストのまま維持（安全策）
+ */
+async function searchAndInsertCitationLinks(text: string): Promise<string> {
+  // 出典タグを全件抽出
+  const citationRegex = /<p class="source-citation">※出典元：(.+?)<\/p>/g;
+  const citations: Array<{ fullMatch: string; content: string }> = [];
+
+  let regexMatch = citationRegex.exec(text);
+  while (regexMatch !== null) {
+    citations.push({
+      fullMatch: regexMatch[0],
+      content: regexMatch[1],
+    });
+    regexMatch = citationRegex.exec(text);
+  }
+
+  if (citations.length === 0) {
+    console.log("\n📎 出典タグが見つかりませんでした");
+    return text;
+  }
+
+  console.log("\n🔍 出典URL検索開始: " + citations.length + "件の出典を検索します");
+
+  // 重複・自社資料を除外して検索対象を絞る
+  const searchTargets: Array<{ index: number; content: string }> = [];
+  const alreadySearched: Record<string, string> = {}; // content → URL のキャッシュ
+
+  for (let i = 0; i < citations.length; i++) {
+    const content = citations[i].content;
+
+    // 自社資料はスキップ
+    if (content.indexOf("自社資料") !== -1) {
+      console.log("  ⏭️ スキップ（自社資料）: " + content.substring(0, 40));
+      continue;
+    }
+
+    // 既に同じ出典を検索済みならスキップ
+    if (alreadySearched[content] !== undefined) {
+      continue;
+    }
+
+    alreadySearched[content] = ""; // プレースホルダー
+    searchTargets.push({ index: i, content: content });
+  }
+
+  // Google Custom Search APIで各出典を検索（3並列で制限）
+  const CONCURRENT_LIMIT = 3;
+  for (let batch = 0; batch < searchTargets.length; batch += CONCURRENT_LIMIT) {
+    const batchItems = searchTargets.slice(batch, batch + CONCURRENT_LIMIT);
+
+    const promises = batchItems.map(function(target) {
+      return searchCitationUrl(target.content);
+    });
+
+    const results = await Promise.all(promises);
+
+    for (let j = 0; j < batchItems.length; j++) {
+      const url = results[j];
+      if (url) {
+        alreadySearched[batchItems[j].content] = url;
+      }
+    }
+  }
+
+  // 検索結果をもとに出典テキストにリンクを挿入
+  let linkedCount = 0;
+  let resultText = text;
+
+  for (let i = 0; i < citations.length; i++) {
+    const citation = citations[i];
+    const url = alreadySearched[citation.content];
+
+    if (url) {
+      linkedCount++;
+      const linkedTag = '<p class="source-citation">※出典元：<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + citation.content + '</a></p>';
+      resultText = resultText.replace(citation.fullMatch, linkedTag);
+    }
+  }
+
+  console.log("\n📊 出典リンク挿入結果: " + linkedCount + "/" + citations.length + "件リンク化");
+  return resultText;
+}
+
+/**
+ * 1件の出典テキストをGoogle検索し、検索結果1位のURLを返す。
+ * 検索失敗・結果0件の場合は空文字を返す。
+ */
+async function searchCitationUrl(citationContent: string): Promise<string> {
+  try {
+    // 検索クエリを構築（年号や記号を除去してクリーンなクエリに）
+    const cleanQuery = citationContent
+      .replace(/[（(].+?[)）]/g, " ")  // 括弧内を除去
+      .replace(/【.+?】/g, " ")        // 墨付き括弧を除去
+      .replace(/[｜|]/g, " ")           // パイプを除去
+      .replace(/\s+/g, " ")            // 連続スペースを統一
+      .trim();
+
+    console.log("  🔎 検索: " + cleanQuery.substring(0, 50) + (cleanQuery.length > 50 ? "..." : ""));
+
+    // searchGoogle は既存のサービスを再利用（APIキーはサーバー側で管理）
+    const results = await searchGoogle(cleanQuery, "", "", 1);
+
+    if (results && results.length > 0) {
+      const topResult = results[0];
+      console.log("    ✅ → " + topResult.link);
+      return topResult.link;
+    }
+
+    console.log("    ⚠️ 検索結果なし");
+    return "";
+  } catch (err) {
+    console.error("    ❌ 検索エラー:", err);
+    return "";
   }
 }
 

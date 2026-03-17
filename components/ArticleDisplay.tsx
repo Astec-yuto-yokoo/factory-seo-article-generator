@@ -151,6 +151,8 @@ ${article.plainText}`;
     ul, ol { margin: 20px 0; padding-left: 30px; }
     li { margin: 8px 0; }
     .source-citation { font-size: 0.85em; color: #666; margin-top: 4px; margin-bottom: 16px; }
+    .source-citation a { color: #2563eb; text-decoration: underline; }
+    .source-citation a:hover { color: #1d4ed8; }
   </style>
   ${faqJsonLd}
 </head>
@@ -309,6 +311,8 @@ ${article.plainText}`;
           <div className="bg-white rounded-lg p-8 text-gray-900">
             <style dangerouslySetInnerHTML={{ __html: `
               .article-content .source-citation { font-size: 0.85em; color: #6b7280; margin-top: 4px; margin-bottom: 16px; }
+              .article-content .source-citation a { color: #2563eb; text-decoration: underline; }
+              .article-content .source-citation a:hover { color: #1d4ed8; }
             `}} />
             <h1 className="text-3xl font-bold mb-6 pb-4 border-b-2 border-blue-600">
               {article.title}
