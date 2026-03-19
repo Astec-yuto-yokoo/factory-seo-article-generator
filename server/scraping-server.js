@@ -277,9 +277,17 @@ async function initBrowser() {
       // システムインストール済みのChromeを優先的に使用する
       const fs = require("fs");
       const systemChromePaths = [
+        // macOS
         "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
         "/Applications/Chromium.app/Contents/MacOS/Chromium",
-      ];
+        // Windows
+        "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+        "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+        process.env.LOCALAPPDATA ? `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe` : "",
+        // Linux
+        "/usr/bin/google-chrome",
+        "/usr/bin/chromium-browser",
+      ].filter(Boolean);
       let executablePath = undefined;
       for (const p of systemChromePaths) {
         if (fs.existsSync(p)) {
