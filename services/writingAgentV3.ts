@@ -563,7 +563,7 @@ interface WritingRequest {
   referenceMaterialContext?: string; // 参考資料テキスト（任意）
 }
 
-// 内部リンクマップを取得する関数
+// 内部リンクマップを取得する関数（スプレッドシート由来）
 async function fetchInternalLinkMap(): Promise<Map<string, string>> {
   const linkMap = new Map<string, string>();
 
@@ -577,9 +577,9 @@ async function fetchInternalLinkMap(): Promise<Map<string, string>> {
     }
 
     const API_URL =
-      import.meta.env.VITE_API_URL?.replace("/api", "") ||
-      import.meta.env.VITE_BACKEND_URL ||
-      "http://localhost:3001";
+      import.meta.env.VITE_API_URL
+        ? import.meta.env.VITE_API_URL.replace("/api", "")
+        : import.meta.env.VITE_BACKEND_URL || "http://localhost:3001";
     const response = await fetch(
       `${API_URL}/api/spreadsheet-mode/internal-links`,
       {
@@ -607,6 +607,47 @@ async function fetchInternalLinkMap(): Promise<Map<string, string>> {
   } catch (error) {
     console.error("❌ 内部リンクマップ取得エラー:", error);
     return linkMap;
+  }
+}
+
+// サイトページ一覧を取得する関数（sitemap.xml 由来）
+async function fetchSitePages(): Promise<Array<{ url: string; title: string }>> {
+  try {
+    const API_KEY = import.meta.env.VITE_INTERNAL_API_KEY;
+    if (!API_KEY) return [];
+
+    const BACKEND_URL =
+      import.meta.env.VITE_API_URL
+        ? import.meta.env.VITE_API_URL.replace("/api", "")
+        : import.meta.env.VITE_BACKEND_URL || "http://localhost:3001";
+
+    const domain =
+      import.meta.env.VITE_COMPANY_MEDIA_URL ||
+      import.meta.env.VITE_COMPANY_SITE_URL ||
+      "";
+
+    const url = domain
+      ? `${BACKEND_URL}/api/site-pages?domain=${encodeURIComponent(domain)}`
+      : `${BACKEND_URL}/api/site-pages`;
+
+    const response = await fetch(url, {
+      headers: { "x-api-key": API_KEY },
+    });
+
+    if (!response.ok) {
+      console.warn(`⚠️ サイトページ取得失敗: ${response.status}`);
+      return [];
+    }
+
+    const data = await response.json();
+    if (data.success && Array.isArray(data.pages)) {
+      console.log(`✅ サイトページ取得成功: ${data.pages.length}件`);
+      return data.pages;
+    }
+    return [];
+  } catch (error) {
+    console.error("❌ サイトページ取得エラー:", error);
+    return [];
   }
 }
 
@@ -726,50 +767,70 @@ ${relevantData
       console.log("⏭️ [1.6/4] スキップ: Supabase未設定");
     }
 
-    // 内部リンクマップの取得
+    // 内部リンクの取得（スプレッドシート + sitemap.xml を統合）
     let internalLinkText = "";
     try {
-      console.log("\n🔄 [1.7/4] 内部リンクマップを取得中...");
+      console.log("\n🔄 [1.7/4] 内部リンク情報を取得中...");
       const linkStartTime = Date.now();
-      const internalLinkMap = await fetchInternalLinkMap();
 
-      if (internalLinkMap.size > 0) {
-        const linkList = Array.from(internalLinkMap.entries())
-          .map(([keyword, url]) => `- ${keyword}: ${url}`)
+      // スプレッドシート由来（キーワード → URL）とsitemap由来を並列取得
+      const [internalLinkMap, sitePages] = await Promise.all([
+        fetchInternalLinkMap(),
+        fetchSitePages(),
+      ]);
+
+      // 統合ページリスト作成
+      // { title, url } の形式に統一
+      const mergedPages: Array<{ title: string; url: string }> = [];
+
+      // スプレッドシート分を追加（キーワードをタイトルとして扱う）
+      internalLinkMap.forEach((url, keyword) => {
+        mergedPages.push({ title: keyword, url });
+      });
+
+      // sitemap分を追加（重複URLはスキップ）
+      const existingUrls = new Set(mergedPages.map((p) => p.url));
+      sitePages.forEach((page) => {
+        if (!existingUrls.has(page.url)) {
+          mergedPages.push({ title: page.title, url: page.url });
+        }
+      });
+
+      if (mergedPages.length > 0) {
+        const linkList = mergedPages
+          .map((p) => `- ${p.title} : ${p.url}`)
           .join("\n");
 
         internalLinkText = `
 【内部リンク挿入指示（重要）】
-以下は当サイトの公開予定記事URLのマップです。記事執筆時、見出し（H2/H3）の終わり、次の見出しに入る前に、関連する内部リンクをURLベタ貼りで挿入してください。
+以下は当サイトの既存ページ一覧です。記事執筆時、見出し（H2/H3）の本文内容と関連するページへの内部リンクを <a> タグで自然な形で挿入してください。
 
 ■ 挿入ルール：
-1. 挿入位置: 各見出し（H2/H3）の本文が終わった後、次の見出しタグの直前
-2. 挿入形式: URLのみをベタ貼り（<a>タグ不要、テキスト説明不要）
-3. 判定基準: 「この見出しの話題をより詳しく書いている記事があるか？」
-4. 挿入数: 1記事あたり3〜5個（記事ボリュームが大きければ7〜10個）
-5. 関連性: 見出しの内容と下記キーワードの関連性が高いもののみ挿入
+1. 挿入位置: 本文中の関連キーワード・フレーズに自然にリンクを設置する
+2. 挿入形式: <a href="URL" target="_blank" rel="noopener">アンカーテキスト</a>
+   アンカーテキストは文脈に合わせて自然な日本語フレーズを使う（URLそのままは禁止）
+3. 判定基準: 「この段落の話題をより詳しく解説しているページか？」
+4. 挿入数: 1記事あたり3〜7個（過剰リンクは避ける）
+5. 関連性: 見出し・段落の内容とページタイトルの関連性が明確なもののみ挿入
 
 ■ 挿入例：
 <h2>生成AIの著作権問題</h2>
-<p>生成AIによる著作権侵害のリスクは...</p>
-<p>具体的な対策としては...</p>
-https://example.com/generative-ai-copyright
-<h2>次の見出し</h2>
+<p>生成AIによる著作権侵害のリスクは年々高まっており、<a href="https://example.com/ai-copyright" target="_blank" rel="noopener">生成AIの著作権対策ガイド</a>でも詳しく解説されています。</p>
 
-■ 利用可能な内部リンク一覧：
+■ 利用可能なサイト内ページ一覧（タイトル : URL）：
 ${linkList}
 
-重要：上記リスト内のURLのみを使用し、存在しないURLは絶対に挿入しないこと。
+重要：上記リスト内のURLのみを使用すること。存在しないURLは絶対に挿入しないこと。
 `;
         const linkTime = ((Date.now() - linkStartTime) / 1000).toFixed(1);
         console.log(
-          `✅ [1.7/4] 完了: 内部リンクマップ取得 ${internalLinkMap.size}件 (${linkTime}秒)`
+          `✅ [1.7/4] 完了: 内部リンク統合 スプレッドシート${internalLinkMap.size}件 + sitemap${sitePages.length}件 = 合計${mergedPages.length}件 (${linkTime}秒)`
         );
       } else {
         console.log("ℹ️ [1.7/4] 完了: 内部リンクなし");
       }
     } catch (error) {
-      console.error("⚠️ [1.7/4] エラー: 内部リンクマップ取得失敗:", error);
+      console.error("⚠️ [1.7/4] エラー: 内部リンク取得失敗:", error);
       // エラーがあっても続行
     }
 

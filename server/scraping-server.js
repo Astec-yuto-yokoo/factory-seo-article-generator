@@ -273,10 +273,26 @@ async function initBrowser() {
       }
     } else {
       // 開発環境：通常のpuppeteer を使用
+      // MDM管理Macではバンドル版Chromiumが起動ブロックされる場合があるため
+      // システムインストール済みのChromeを優先的に使用する
+      const fs = require("fs");
+      const systemChromePaths = [
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+      ];
+      let executablePath = undefined;
+      for (const p of systemChromePaths) {
+        if (fs.existsSync(p)) {
+          executablePath = p;
+          console.log(`🔎 システムChrome検出: ${p}`);
+          break;
+        }
+      }
+
       console.log("🚀 Puppeteer (開発環境) を起動中...");
       try {
-        browser = await puppeteer.launch({
-          headless: true,
+        const launchOptions = {
+          headless: "new",
           ignoreHTTPSErrors: true,
           protocolTimeout: 60000, // 60秒のタイムアウト
           args: [
@@ -288,7 +304,11 @@ async function initBrowser() {
             "--no-zygote",
             "--disable-gpu",
           ],
-        });
+        };
+        if (executablePath) {
+          launchOptions.executablePath = executablePath;
+        }
+        browser = await puppeteer.launch(launchOptions);
         console.log("✅ 開発環境ブラウザ起動完了");
         const browserVersion = await browser.version();
         console.log(`✅ 使用中のブラウザ: ${browserVersion}`);
@@ -1023,6 +1043,11 @@ app.get("/api/spreadsheet-mode/keywords", getMarkedKeywords);
 app.get("/api/spreadsheet-mode/internal-links", getInternalLinkMap);
 app.post("/api/spreadsheet-mode/update", updateSpreadsheetCell);
 
+// サイトページ一覧（sitemap.xml → 内部リンク用）APIエンドポイント
+const { getSitePages, clearCache: clearSitePageCache } = require("./api/site-pages.js");
+app.get("/api/site-pages", getSitePages);
+app.post("/api/site-pages/clear-cache", clearSitePageCache);
+
 // 参考資料（独自情報ソース）APIエンドポイント
 const {
   getMulterUpload,
@@ -1398,6 +1423,7 @@ const server = app.listen(PORT, "0.0.0.0", () => {
    - POST /api/scrape-multiple (複数URL)
    - POST /api/google-search (Google検索)
    - GET /api/company-data (Google Drive実績データ)
+   - GET /api/site-pages (サイト内ページ一覧・内部リンク用)
    - POST /api/slack-notify (Slack通知プロキシ)
    - GET /api/wordpress/config (WordPress設定取得)
    - POST /api/wordpress/upload-image (WordPress画像アップロード)
