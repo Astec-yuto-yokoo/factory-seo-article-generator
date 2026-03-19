@@ -820,6 +820,8 @@ ${article.plainText}`;
           enableLegalCheck: true,
           parallel: true,
           timeout: 180000, // 3分（180秒）に延長
+          enableMoA: false,             // MoA相互検証スキップ（時短）
+          enableSelfEvaluation: false,  // 自己評価ループスキップ（時短）
           onProgress: (message, progress) => {
             setFinalProofStatus(`${message} (${progress}%)`);
           },
@@ -1570,6 +1572,8 @@ ${
       const orchestrator = new MultiAgentOrchestrator({
         enableLegalCheck: true,
         timeout: 180000, // 3分
+        enableMoA: false,             // MoA相互検証スキップ（時短）
+        enableSelfEvaluation: false,  // 自己評価ループスキップ（時短）
         onProgress: (message, progress) => {
           setAutoFlowProgress({
             isRunning: true,
