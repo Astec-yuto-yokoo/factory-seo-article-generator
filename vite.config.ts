@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: {
       host: "127.0.0.1",
-      port: 5176,
+      port: 5178,
       strictPort: true,
       proxy: {
         "/api": {

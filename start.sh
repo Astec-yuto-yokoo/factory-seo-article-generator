@@ -7,10 +7,10 @@ echo "🚀 SEO Content Generator を起動します..."
 
 # 既存のプロセスを確認
 echo "📍 既存のプロセスを確認中..."
-lsof -i :5176 > /dev/null 2>&1
+lsof -i :5178 > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo "⚠️  ポート5176が使用中です。既存のプロセスを終了します..."
-    kill $(lsof -t -i:5176) 2>/dev/null
+    echo "⚠️  ポート5178が使用中です。既存のプロセスを終了します..."
+    kill $(lsof -t -i:5178) 2>/dev/null
     sleep 2
 fi
 
@@ -21,10 +21,10 @@ if [ $? -eq 0 ]; then
     sleep 2
 fi
 
-lsof -i :5177 > /dev/null 2>&1
+lsof -i :5179 > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo "⚠️  ポート5177が使用中です。既存のプロセスを終了します..."
-    kill $(lsof -t -i:5177) 2>/dev/null
+    echo "⚠️  ポート5179が使用中です。既存のプロセスを終了します..."
+    kill $(lsof -t -i:5179) 2>/dev/null
     sleep 2
 fi
 
@@ -48,9 +48,9 @@ cd ..
 # 起動完了メッセージ
 echo ""
 echo "✅ 起動完了！"
-echo "📍 メインアプリ: http://localhost:5176"
+echo "📍 メインアプリ: http://localhost:5178"
 echo "📍 スクレイピングサーバー: http://localhost:3001"
-echo "📍 画像生成エージェント: http://localhost:5177"
+echo "📍 画像生成エージェント: http://localhost:5179"
 echo "   - Google Search API: /api/google-search"
 echo "   - Puppeteer Scraping: /api/scrape"
 echo ""

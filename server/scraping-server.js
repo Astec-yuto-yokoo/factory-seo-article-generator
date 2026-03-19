@@ -31,10 +31,10 @@ app.use(
 // CORS設定（許可するオリジンのみ）
 const allowedOrigins = [
   // ローカル開発環境
-  "http://localhost:5176",
-  "http://127.0.0.1:5176",
-  "http://localhost:5177", // 画像生成エージェント
-  "http://127.0.0.1:5177",
+  "http://localhost:5178",
+  "http://127.0.0.1:5178",
+  "http://localhost:5179", // 画像生成エージェント
+  "http://127.0.0.1:5179",
   // 環境変数で追加設定（本番環境用）
   process.env.PRODUCTION_DOMAIN,   // 本番ドメイン
   process.env.SEO_FRONTEND_URL,    // SEOエージェントのURL

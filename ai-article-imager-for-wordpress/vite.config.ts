@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
     return {
       plugins: [react()],
       server: {
-        port: 5177, // 画像生成エージェント専用ポート
+        port: 5179, // 画像生成エージェント専用ポート
         host: true,
         fs: {
           strict: false
