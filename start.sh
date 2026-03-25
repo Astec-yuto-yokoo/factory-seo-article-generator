@@ -14,10 +14,10 @@ if [ $? -eq 0 ]; then
     sleep 2
 fi
 
-lsof -i :3001 > /dev/null 2>&1
+lsof -i :3002 > /dev/null 2>&1
 if [ $? -eq 0 ]; then
     echo "⚠️  ポート3001が使用中です。既存のプロセスを終了します..."
-    kill $(lsof -t -i:3001) 2>/dev/null
+    kill $(lsof -t -i:3002) 2>/dev/null
     sleep 2
 fi
 
@@ -49,7 +49,7 @@ cd ..
 echo ""
 echo "✅ 起動完了！"
 echo "📍 メインアプリ: http://localhost:5178"
-echo "📍 スクレイピングサーバー: http://localhost:3001"
+echo "📍 スクレイピングサーバー: http://localhost:3002"
 echo "📍 画像生成エージェント: http://localhost:5179"
 echo "   - Google Search API: /api/google-search"
 echo "   - Puppeteer Scraping: /api/scrape"

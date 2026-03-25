@@ -16,7 +16,7 @@ const chromium = require("@sparticuz/chromium");
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
 const app = express();
-const PORT = process.env.PORT || 3001; // Renderでは環境変数PORTを使用
+const PORT = process.env.PORT || 3002; // factory用（apaman=3001と共存）
 
 // Renderのプロキシ設定（Rate Limitingエラー対策）
 app.set("trust proxy", true);
@@ -30,11 +30,16 @@ app.use(
 
 // CORS設定（許可するオリジンのみ）
 const allowedOrigins = [
-  // ローカル開発環境
+  // ローカル開発環境（このシステム）
   "http://localhost:5178",
   "http://127.0.0.1:5178",
   "http://localhost:5179", // 画像生成エージェント
   "http://127.0.0.1:5179",
+  // 別システム（共用スクレイピングサーバー）
+  "http://localhost:5176",
+  "http://127.0.0.1:5176",
+  "http://localhost:5177",
+  "http://127.0.0.1:5177",
   // 環境変数で追加設定（本番環境用）
   process.env.PRODUCTION_DOMAIN,   // 本番ドメイン
   process.env.SEO_FRONTEND_URL,    // SEOエージェントのURL

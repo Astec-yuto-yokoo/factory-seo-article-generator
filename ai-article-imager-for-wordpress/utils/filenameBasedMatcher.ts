@@ -350,8 +350,8 @@ H2見出し: ${h2Text}
 // H2見出しが「まとめ」かどうかを判定
 export function isSummaryHeading(h2Text: string): boolean {
   const text = h2Text.toLowerCase();
-  // 「まとめ：」（コロン付き）の見出しのみを判定
-  return text.includes("まとめ：");
+  // 「まとめ：」（コロン付き）または「お問い合わせ」の見出しを判定（画像不要セクション）
+  return text.includes("まとめ：") || text.includes("お問い合わせ");
 }
 
 // メイン関数：ファイル名ベースで最適な画像を選択

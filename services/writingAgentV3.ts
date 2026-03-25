@@ -1013,7 +1013,13 @@ ${
       // リード文の「」「」連続を改行処理
       const formattedText = formatLeadQuotes(text);
 
-      return formattedText;
+      // WordPressブロックエディタ互換のリストHTML整形
+      const wpFixedText = fixWordPressListBlocks(formattedText);
+
+      // 末尾にお問い合わせフォームを追加（factory専用）
+      const contactFormHtml = `\n\n<!-- wp:heading -->\n<h2 class="wp-block-heading"><strong>お問い合わせ</strong></h2>\n<!-- /wp:heading -->\n<!-- wp:html -->\n<iframe src="https://survey.zohopublic.jp/zs/G9l6Hu" frameborder='0' style='height:700px;width:100%;' marginwidth='0' marginheight='0' scrolling='auto' allow='geolocation'></iframe>\n<!-- /wp:html -->`;
+
+      return wpFixedText + contactFormHtml;
     } catch (error) {
       clearInterval(progressInterval);
       throw error;
@@ -1238,6 +1244,39 @@ export function updateCustomInstructions(newInstructions: string): void {
 // この処理を無効化し、元のテキストをそのまま返す
 function formatLeadQuotes(text: string): string {
   return text;
+}
+
+/**
+ * WordPress ブロックエディタ互換のリストHTML整形
+ * AIが生成する不正なリスト構造を修正：
+ * - <ul> の二重ネスト除去
+ * - wp:list ブロック内の余分な空白除去
+ * - <li> 内の改行除去
+ */
+function fixWordPressListBlocks(text: string): string {
+  // 1. <ul><ul> の二重ネストを除去
+  let fixed = text.replace(/<ul>\s*<ul>/gi, '<ul>');
+  fixed = fixed.replace(/<\/ul>\s*<\/ul>/gi, '</ul>');
+
+  // 2. <ol><ol> の二重ネストも同様に除去
+  fixed = fixed.replace(/<ol>\s*<ol>/gi, '<ol>');
+  fixed = fixed.replace(/<\/ol>\s*<\/ol>/gi, '</ol>');
+
+  // 3. wp:list ブロック内を整形（余分な改行・空白を除去）
+  fixed = fixed.replace(
+    /<!-- wp:list(?:\s[^>]*)? -->\s*(<[uo]l>[\s\S]*?<\/[uo]l>)\s*<!-- \/wp:list -->/gi,
+    (match, listContent) => {
+      const wpListTag = match.match(/<!-- wp:list(?:\s[^>]*)? -->/);
+      if (!wpListTag) return match;
+      // リスト内の <li> 間の余分な改行を除去
+      const cleanedList = listContent
+        .replace(/>\s+</g, '><')
+        .replace(/\n/g, '');
+      return wpListTag[0] + '\n' + cleanedList + '\n<!-- /wp:list -->';
+    }
+  );
+
+  return fixed;
 }
 
 // HTML形式のテキストで「」を改行処理（現在は未使用）
