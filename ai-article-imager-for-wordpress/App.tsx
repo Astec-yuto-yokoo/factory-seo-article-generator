@@ -69,7 +69,7 @@ const App: React.FC<AppProps> = ({ initialArticleData }) => {
     const fetchWpConfig = async () => {
       try {
         const apiUrl =
-          import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+          import.meta.env.VITE_API_URL || "http://localhost:3002/api";
         const apiKey = import.meta.env.VITE_INTERNAL_API_KEY || "";
         const response = await fetch(`${apiUrl}/wordpress/config`, {
           headers: {

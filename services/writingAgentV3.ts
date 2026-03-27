@@ -434,10 +434,11 @@ output_contract:
           </tr>
         </tbody>
       </table>
+      ※表のセル結合（rowspan/colspan）は使用禁止。同じ値が複数行に跨がる場合でも、各行すべてに同じ値を繰り返し記載すること。空セルにしない。
     【禁止事項】
     - マークダウン記法（#、##、*、-、|）の使用は一切禁止
     - コードブロック記法も禁止
-  length_control: "目標文字数が与えられた場合は±5%で寄せる。なければ適切な長文（目安8,000〜20,000字）"
+  length_control: "【執筆指示】セクションで指定された目標文字数を厳守すること（±10%以内）。超過は絶対に避ける"
   per_heading_requirements:
     - "冒頭2文で結論"
     - "数値/条件/手順のいずれかを含む"
@@ -561,6 +562,7 @@ interface WritingRequest {
   useCompanyData?: boolean; // 自社データを使うか
   useCurriculum?: boolean; // カリキュラムデータを使うか
   referenceMaterialContext?: string; // 参考資料テキスト（任意）
+  targetCharCount?: number; // 目標文字数（指定なしの場合デフォルト5500）
 }
 
 // 内部リンクマップを取得する関数（スプレッドシート由来）
@@ -579,7 +581,7 @@ async function fetchInternalLinkMap(): Promise<Map<string, string>> {
     const API_URL =
       import.meta.env.VITE_API_URL
         ? import.meta.env.VITE_API_URL.replace("/api", "")
-        : import.meta.env.VITE_BACKEND_URL || "http://localhost:3001";
+        : import.meta.env.VITE_BACKEND_URL || "http://localhost:3002";
     const response = await fetch(
       `${API_URL}/api/spreadsheet-mode/internal-links`,
       {
@@ -619,7 +621,7 @@ async function fetchSitePages(): Promise<Array<{ url: string; title: string }>> 
     const BACKEND_URL =
       import.meta.env.VITE_API_URL
         ? import.meta.env.VITE_API_URL.replace("/api", "")
-        : import.meta.env.VITE_BACKEND_URL || "http://localhost:3001";
+        : import.meta.env.VITE_BACKEND_URL || "http://localhost:3002";
 
     const domain =
       import.meta.env.VITE_COMPANY_MEDIA_URL ||
@@ -890,7 +892,7 @@ ${request.referenceMaterialContext}
       model: "gemini-2.5-pro",
       generationConfig: {
         temperature: 0.7,
-        maxOutputTokens: 16384, // 20,000文字まで対応（8192→16384に増加）
+        maxOutputTokens: 8192,
         topP: 0.9,
       },
     };
@@ -933,6 +935,10 @@ ${curriculumDataText}
 ${internalLinkText}
 ${primaryDataText}
 ${referenceMaterialText}
+【目標文字数（厳守）】
+記事全体で ${request.targetCharCount || 5500} 文字（±10%以内）。これを超えないこと。
+各セクションは簡潔にまとめ、冗長な表現や繰り返しを避けること。
+
 【執筆指示】
 上記の構成案とカスタムインストラクションに基づいて、SEOに最適化された記事を執筆してください。
 
@@ -1249,30 +1255,106 @@ function formatLeadQuotes(text: string): string {
 /**
  * WordPress ブロックエディタ互換のリストHTML整形
  * AIが生成する不正なリスト構造を修正：
+ * - 既存の wp:list / wp:list-item コメントを除去してから再構築
+ * - 連続する単一項目 <ul><li>...</li></ul> を1つのリストに統合
  * - <ul> の二重ネスト除去
- * - wp:list ブロック内の余分な空白除去
- * - <li> 内の改行除去
+ * - 各 <li> を <!-- wp:list-item --> で囲む（WordPress 6.x必須）
  */
-function fixWordPressListBlocks(text: string): string {
-  // 1. <ul><ul> の二重ネストを除去
-  let fixed = text.replace(/<ul>\s*<ul>/gi, '<ul>');
-  fixed = fixed.replace(/<\/ul>\s*<\/ul>/gi, '</ul>');
+export function fixWordPressListBlocks(text: string): string {
+  console.log("🔧 fixWordPressListBlocks 呼び出し");
+  console.log("🔧 入力に <ul><li> 含む:", text.includes('<ul><li>'));
+  console.log("🔧 入力に wp:list 含む:", text.includes('wp:list'));
+  let fixed = text;
 
-  // 2. <ol><ol> の二重ネストも同様に除去
+  // 1. 既存の wp:list / wp:list-item コメントをすべて除去（クリーンな状態から再構築）
+  fixed = fixed.replace(/<!--\s*wp:list-item\s*-->/gi, '');
+  fixed = fixed.replace(/<!--\s*\/wp:list-item\s*-->/gi, '');
+  fixed = fixed.replace(/<!--\s*wp:list(?:\s[^>]*)?\s*-->/gi, '');
+  fixed = fixed.replace(/<!--\s*\/wp:list\s*-->/gi, '');
+
+  // 2. <ul>/<ol> の class 属性を一旦除去（後で再付与）
+  fixed = fixed.replace(/<ul\s+class="[^"]*">/gi, '<ul>');
+  fixed = fixed.replace(/<ol\s+class="[^"]*">/gi, '<ol>');
+
+  // 3. <ul><ul> / <ol><ol> の二重ネストを除去
+  fixed = fixed.replace(/<ul>\s*<ul>/gi, '<ul>');
+  fixed = fixed.replace(/<\/ul>\s*<\/ul>/gi, '</ul>');
   fixed = fixed.replace(/<ol>\s*<ol>/gi, '<ol>');
   fixed = fixed.replace(/<\/ol>\s*<\/ol>/gi, '</ol>');
 
-  // 3. wp:list ブロック内を整形（余分な改行・空白を除去）
+  // 4. 連続する単一項目リストを統合
+  //    </ul> + (</p><p> や <p></p> や空白) + <ul> → 除去して統合
+  let prevFixed = '';
+  while (prevFixed !== fixed) {
+    prevFixed = fixed;
+    fixed = fixed.replace(
+      /<\/ul>\s*(?:<\/?p>|\s)*\s*<ul>/gi,
+      ''
+    );
+    fixed = fixed.replace(
+      /<\/ol>\s*(?:<\/?p>|\s)*\s*<ol>/gi,
+      ''
+    );
+  }
+
+  // 5. テキスト全体から <li> を抽出してリストブロック単位で再構築
+  //    <ul> ... </ul> 内の全 <li> を取り出し、正しい WP 形式に変換
   fixed = fixed.replace(
-    /<!-- wp:list(?:\s[^>]*)? -->\s*(<[uo]l>[\s\S]*?<\/[uo]l>)\s*<!-- \/wp:list -->/gi,
-    (match, listContent) => {
-      const wpListTag = match.match(/<!-- wp:list(?:\s[^>]*)? -->/);
-      if (!wpListTag) return match;
-      // リスト内の <li> 間の余分な改行を除去
-      const cleanedList = listContent
-        .replace(/>\s+</g, '><')
-        .replace(/\n/g, '');
-      return wpListTag[0] + '\n' + cleanedList + '\n<!-- /wp:list -->';
+    /<(ul|ol)>([\s\S]*?)<\/\1>/gi,
+    (match, tagName, content) => {
+      const isOrdered = tagName.toLowerCase() === 'ol';
+      const listTag = isOrdered ? 'ol' : 'ul';
+      const wpListAttr = isOrdered ? ' {"ordered":true}' : '';
+
+      // <li>...</li> を個別に抽出（中間のゴミタグも無視）
+      const liItems: string[] = [];
+      const liRegex = /<li>([\s\S]*?)<\/li>/gi;
+      let liMatch;
+      while ((liMatch = liRegex.exec(content)) !== null) {
+        const itemContent = liMatch[1].replace(/\n/g, '').trim();
+        if (itemContent) {
+          liItems.push(itemContent);
+        }
+      }
+
+      if (liItems.length === 0) return match;
+
+      // WordPress 6.x 互換フォーマットで再構築
+      const formattedItems = liItems.map(item =>
+        '<!-- wp:list-item -->\n<li>' + item + '</li>\n<!-- /wp:list-item -->'
+      ).join('\n\n');
+
+      return '<!-- wp:list' + wpListAttr + ' -->\n<' + listTag + ' class="wp-block-list">' + formattedItems + '</' + listTag + '>\n<!-- /wp:list -->';
+    }
+  );
+
+  console.log("🔧 出力に <ul><li> 含む:", fixed.includes('<ul><li>'));
+  console.log("🔧 出力に wp:list 含む:", fixed.includes('wp:list'));
+  return fixed;
+}
+
+/**
+ * WordPress Gutenberg テーブルブロック変換
+ * 素の <table> を <!-- wp:table --> + <figure class="wp-block-table"> で包む
+ */
+export function fixWordPressTableBlocks(text: string): string {
+  let fixed = text;
+
+  // 1. 既存の wp:table コメントと figure.wp-block-table ラッパーを除去（クリーンな状態から再構築）
+  fixed = fixed.replace(/<!--\s*wp:table(?:\s[^>]*)?\s*-->/gi, '');
+  fixed = fixed.replace(/<!--\s*\/wp:table\s*-->/gi, '');
+  fixed = fixed.replace(/<figure\s+class="wp-block-table[^"]*">\s*/gi, '');
+  fixed = fixed.replace(/\s*<\/figure>/gi, '');
+
+  // 2. すべての <table>...</table> を Gutenberg テーブルブロックに変換
+  fixed = fixed.replace(
+    /<table>([\s\S]*?)<\/table>/gi,
+    (match, content) => {
+      // テーブル内容が空なら変換しない
+      const trimmed = content.trim();
+      if (!trimmed) return match;
+
+      return '<!-- wp:table -->\n<figure class="wp-block-table"><table>' + content + '</table></figure>\n<!-- /wp:table -->';
     }
   );
 

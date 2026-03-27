@@ -72,7 +72,7 @@ class SlackNotificationService {
         return;
       }
       const backendUrl =
-        import.meta.env.VITE_BACKEND_URL || "http://localhost:3001";
+        import.meta.env.VITE_BACKEND_URL || "http://localhost:3002";
       const response = await fetch(`${backendUrl}/api/slack-notify`, {
         method: "POST",
         headers: {

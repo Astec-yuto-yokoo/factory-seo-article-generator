@@ -371,7 +371,7 @@ async function fetchCompanyData(): Promise<any> {
     const apiKey = import.meta.env.VITE_INTERNAL_API_KEY;
 
     const backendUrl =
-      import.meta.env.VITE_BACKEND_URL || "http://localhost:3001";
+      import.meta.env.VITE_BACKEND_URL || "http://localhost:3002";
     const response = await fetch(`${backendUrl}/api/company-data`, {
       headers: {
         ...(apiKey && { "x-api-key": apiKey }),
@@ -525,12 +525,15 @@ ${articleContent}
       .replace(/<b>/gi, "<strong>")
       .replace(/<\/b>/gi, "</strong>");
 
+    // WordPressブロックエディタ互換のリストHTML整形
+    const wpFixedContent = fixWordPressListBlocksRevision(tagConvertedContent);
+
     console.log("✅ 記事修正完了");
-    console.log("  - 修正後の長さ:", tagConvertedContent.length, "文字");
+    console.log("  - 修正後の長さ:", wpFixedContent.length, "文字");
 
     return {
       success: true,
-      revised: tagConvertedContent,
+      revised: wpFixedContent,
     };
   } catch (error) {
     console.error("❌ 記事修正エラー:", error);
@@ -1641,4 +1644,175 @@ ${originalArticle}
       }`
     );
   }
+}
+
+export async function reviseArticleH2Section(
+  fullArticleHtml: string,
+  h2Heading: string,
+  userPrompt: string,
+  keyword: string
+): Promise<string> {
+  console.log(`🔧 記事H2セクション修正開始: 「${h2Heading}」`);
+  console.log(`📝 修正指示: ${userPrompt}`);
+
+  // H2セクションの抽出（対象H2から次のH2またはEOFまで）
+  const h2Pattern = /<h2[^>]*>/gi;
+  const matches: Array<{ index: number; text: string }> = [];
+  let match;
+  while ((match = h2Pattern.exec(fullArticleHtml)) !== null) {
+    matches.push({ index: match.index, text: match[0] });
+  }
+
+  // 対象H2の位置を特定
+  let targetStart = -1;
+  let targetEnd = -1;
+  for (let i = 0; i < matches.length; i++) {
+    const sectionStart = matches[i].index;
+    const sectionEnd = i + 1 < matches.length ? matches[i + 1].index : fullArticleHtml.length;
+    const sectionHtml = fullArticleHtml.slice(sectionStart, sectionEnd);
+    // H2タグ内のテキストを抽出して照合
+    const headingTextMatch = sectionHtml.match(/<h2[^>]*>([\s\S]*?)<\/h2>/i);
+    if (headingTextMatch) {
+      const extractedText = headingTextMatch[1].replace(/<[^>]*>/g, '').trim();
+      if (extractedText === h2Heading.trim()) {
+        targetStart = sectionStart;
+        targetEnd = sectionEnd;
+        break;
+      }
+    }
+  }
+
+  if (targetStart === -1) {
+    throw new Error(`H2セクション「${h2Heading}」が記事内に見つかりません`);
+  }
+
+  const targetSection = fullArticleHtml.slice(targetStart, targetEnd);
+  const beforeSection = fullArticleHtml.slice(0, targetStart);
+  const afterSection = fullArticleHtml.slice(targetEnd);
+
+  const prompt = `あなたはSEO記事修正の専門家です。以下のH2セクションをユーザーの指示に基づいて修正してください。
+
+【キーワード】
+${keyword}
+
+【修正対象のH2セクション（HTML）】
+${targetSection}
+
+【ユーザーの修正指示】
+${userPrompt}
+
+【重要ルール】
+- 修正対象のH2セクションのHTMLのみを返すこと
+- H2見出しタグ（<h2>〜</h2>）から始めること
+- HTMLタグ構造を維持する（WordPress Gutenberg互換のwp:コメントタグも保持）
+- 文体（です・ます調）を維持する
+- <b>タグではなく<strong>タグを使う
+- 箇条書きは <!-- wp:list --> / <!-- wp:list-item --> の構造を維持する
+- テーブルは <!-- wp:table --> / <figure class="wp-block-table"> の構造を維持する
+- 出典URLのaタグは削除しない
+- 説明・注釈は一切出力しない。修正後のHTMLのみを返すこと`;
+
+  try {
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-pro",
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 8192,
+      },
+    });
+
+    const startTime = Date.now();
+    const result = await model.generateContent(prompt);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`✅ API応答受信（処理時間: ${elapsed}秒）`);
+
+    let revisedSection = result.response.text();
+    if (!revisedSection) {
+      throw new Error("修正結果が生成されませんでした");
+    }
+
+    // コードブロックマーカーを除去
+    revisedSection = revisedSection.replace(/^```html\s*/i, '').replace(/\s*```$/i, '').trim();
+
+    // <b>→<strong>変換
+    revisedSection = revisedSection
+      .replace(/<b>/gi, "<strong>")
+      .replace(/<\/b>/gi, "</strong>");
+
+    // セクションを結合して返す
+    const revisedFull = beforeSection + revisedSection + afterSection;
+    console.log(`✅ 記事H2セクション修正完了: 「${h2Heading}」`);
+    return revisedFull;
+  } catch (error) {
+    console.error('記事H2セクション修正エラー:', error);
+    throw new Error(`H2セクション「${h2Heading}」の修正に失敗しました`);
+  }
+}
+
+/**
+ * WordPress ブロックエディタ互換のリストHTML整形（修正サービス用）
+ * writingAgentV3.ts の fixWordPressListBlocks と同一ロジック
+ */
+function fixWordPressListBlocksRevision(text: string): string {
+  let fixed = text;
+
+  // 1. 既存の wp:list / wp:list-item コメントをすべて除去（クリーンな状態から再構築）
+  fixed = fixed.replace(/<!--\s*wp:list-item\s*-->/gi, '');
+  fixed = fixed.replace(/<!--\s*\/wp:list-item\s*-->/gi, '');
+  fixed = fixed.replace(/<!--\s*wp:list(?:\s[^>]*)?\s*-->/gi, '');
+  fixed = fixed.replace(/<!--\s*\/wp:list\s*-->/gi, '');
+
+  // 2. <ul>/<ol> の class 属性を一旦除去（後で再付与）
+  fixed = fixed.replace(/<ul\s+class="[^"]*">/gi, '<ul>');
+  fixed = fixed.replace(/<ol\s+class="[^"]*">/gi, '<ol>');
+
+  // 3. <ul><ul> / <ol><ol> の二重ネストを除去
+  fixed = fixed.replace(/<ul>\s*<ul>/gi, '<ul>');
+  fixed = fixed.replace(/<\/ul>\s*<\/ul>/gi, '</ul>');
+  fixed = fixed.replace(/<ol>\s*<ol>/gi, '<ol>');
+  fixed = fixed.replace(/<\/ol>\s*<\/ol>/gi, '</ol>');
+
+  // 4. 連続する単一項目リストを統合
+  let prevFixed = '';
+  while (prevFixed !== fixed) {
+    prevFixed = fixed;
+    fixed = fixed.replace(
+      /<\/ul>\s*(?:<\/?p>|\s)*\s*<ul>/gi,
+      ''
+    );
+    fixed = fixed.replace(
+      /<\/ol>\s*(?:<\/?p>|\s)*\s*<ol>/gi,
+      ''
+    );
+  }
+
+  // 5. すべての <ul>/<ol> ブロックを WordPress 6.x 互換フォーマットに変換
+  fixed = fixed.replace(
+    /<(ul|ol)>([\s\S]*?)<\/\1>/gi,
+    (match, tagName, content) => {
+      const isOrdered = tagName.toLowerCase() === 'ol';
+      const listTag = isOrdered ? 'ol' : 'ul';
+      const wpListAttr = isOrdered ? ' {"ordered":true}' : '';
+
+      const liItems: string[] = [];
+      const liRegex = /<li>([\s\S]*?)<\/li>/gi;
+      let liMatch;
+      while ((liMatch = liRegex.exec(content)) !== null) {
+        const itemContent = liMatch[1].replace(/\n/g, '').trim();
+        if (itemContent) {
+          liItems.push(itemContent);
+        }
+      }
+
+      if (liItems.length === 0) return match;
+
+      const formattedItems = liItems.map(item =>
+        '<!-- wp:list-item -->\n<li>' + item + '</li>\n<!-- /wp:list-item -->'
+      ).join('\n\n');
+
+      return '<!-- wp:list' + wpListAttr + ' -->\n<' + listTag + ' class="wp-block-list">' + formattedItems + '</' + listTag + '>\n<!-- /wp:list -->';
+    }
+  );
+
+  return fixed;
 }

@@ -127,7 +127,7 @@ const App: React.FC = () => {
     // フル自動モード（単体 or スプシモード）の時に有効
     if (!isFullAutoMode) return;
 
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:3001";
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:3002";
 
     const keepAlive = () => {
       fetch(`${backendUrl}/api/health`)
@@ -862,7 +862,7 @@ const App: React.FC = () => {
       const apiUrl =
         import.meta.env.VITE_API_URL?.replace("/api", "") ||
         import.meta.env.VITE_BACKEND_URL ||
-        "http://localhost:3001";
+        "http://localhost:3002";
 
       console.log("🏥 ヘルスチェック開始:", `${apiUrl}/api/health`);
 
@@ -1282,7 +1282,7 @@ const App: React.FC = () => {
       const apiUrl =
         import.meta.env.VITE_API_URL?.replace("/api", "") ||
         import.meta.env.VITE_BACKEND_URL ||
-        "http://localhost:3001";
+        "http://localhost:3002";
 
       if (!apiKey) {
         throw new Error(
@@ -1402,7 +1402,7 @@ const App: React.FC = () => {
               <LogoIcon className="h-8 w-8 text-blue-600" />
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">
-              Content Creation Agents
+              【工場営繕】ブログ作成エージェント
             </h1>
           </div>
           <p className="text-gray-500 text-sm sm:text-base">
@@ -1690,6 +1690,7 @@ const App: React.FC = () => {
                   <OutlineDisplayV2
                     outline={outlineV2}
                     keyword={keyword}
+                    onOutlineUpdate={(updatedOutline) => setOutlineV2(updatedOutline)}
                     onStartWritingV1={() => {
                       setWritingMode("v1");
                       setShowArticleWriter(true);
