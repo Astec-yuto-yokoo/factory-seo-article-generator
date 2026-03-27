@@ -150,7 +150,8 @@ VITE_SERVICE_NAME / VITE_COMPANY_NAME  # 自社ブランド情報
 - `ArticleWriter.tsx` で `characterCountAnalysis.average` を上限6,000でキャップして渡す
 - プロンプトで「±10%以内、超過禁止」と明示指示
 - `maxOutputTokens: 8192` でトークン上限も制限
-- **注意**: `maxOutputTokens` や `length_control` のプロンプト文言を勝手に緩和しないこと
+- **1段落（`<p>`タグ）あたり最大140字**を厳守。超える場合は分割する
+- **注意**: `maxOutputTokens` や `length_control`、段落文字数上限のプロンプト文言を勝手に緩和しないこと
 
 ## H2ブロック単位修正機能
 
