@@ -809,7 +809,7 @@ ${relevantData
 
 ■ 挿入ルール：
 1. 挿入位置: 本文中の関連キーワード・フレーズに自然にリンクを設置する
-2. 挿入形式: <a href="URL" target="_blank" rel="noopener">アンカーテキスト</a>
+2. 挿入形式: <a href="[上記リストから選んだ実際のURL]" target="_blank" rel="noopener">アンカーテキスト</a>
    アンカーテキストは文脈に合わせて自然な日本語フレーズを使う（URLそのままは禁止）
 3. 判定基準: 「この段落の話題をより詳しく解説しているページか？」
 4. 挿入数: 1記事あたり3〜7個（過剰リンクは避ける）
@@ -823,6 +823,7 @@ ${relevantData
 ${linkList}
 
 重要：上記リスト内のURLのみを使用すること。存在しないURLは絶対に挿入しないこと。
+「href="URL"」「href="[URL]"」のような文字通りのプレースホルダーは絶対に出力禁止。関連するURLがリストにない場合はリンク自体を省略すること。
 `;
         const linkTime = ((Date.now() - linkStartTime) / 1000).toFixed(1);
         console.log(
