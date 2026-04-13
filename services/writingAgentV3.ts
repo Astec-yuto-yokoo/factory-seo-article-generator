@@ -10,6 +10,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { companyDataService } from "./companyDataService";
 import { curriculumDataService } from "./curriculumDataService";
 import { getContextForKeywords, isSupabaseAvailable } from "./primaryDataService";
+import { isHeatRelatedKeyword, HEAT_STEERING_WRITING_INSTRUCTIONS } from "./heatSteeringConfig";
+import { buildProductRecommendationText } from "./productRecommendationConfig";
 // latestAIModelsは汎用化のため削除
 
 const API_KEY =
@@ -886,19 +888,26 @@ ${linkList}
 
 ${request.referenceMaterialContext}
 
-執筆への反映ルール：
+執筆への反映ルール（必須）：
+※ 以下の参考資料情報は、この記事の独自性・専門性を高めるために不可欠です。必ず記事本文に反映してください。
 1. 「独自データ・統計」→ 関連する段落で具体的な数値として引用。「自社調査によると〜」などの自然な導入で記載
 2. 「導入事例・成功体験」→ Before/After形式で具体的に記述。企業名・数値は正確に引用
 3. 「専門的知見・ノウハウ」→ 解説の中で「実務上のポイントとして〜」など、経験に基づく情報として自然に織り込む
 4. 「FAQ・よくある課題」→ FAQセクションや関連H2の中で読者の疑問として取り上げる
 5. 「記事への活用提案」→ この提案内容を参考に、各セクションへ自然に分散して配置する
 6. 引用した箇所の直後に出典を記載: <p class="source-citation">※出典元：自社資料「資料タイトル」</p>
-7. 無理に全情報を使う必要はない。記事の文脈・読者の関心に合う情報のみ使用すること
+7. 上記の参考資料情報のうち、最低でも3箇所以上を記事本文に反映すること。反映ゼロは禁止
 `;
       console.log(`✅ [1.8/4] 完了: 参考資料注入 (${request.referenceMaterialContext.length}文字)`);
     } else {
       console.log("⏭️ [1.8/4] スキップ: 参考資料なし");
     }
+
+    // ダウンロード資料リンクの構築
+    const downloadResourceText = buildDownloadResourceText(request.keyword, request.outline);
+
+    // 自社製品レコメンドの構築
+    const productRecommendationText = buildProductRecommendationText(request.keyword, request.outline);
 
     // モデル設定
     const modelConfig: any = {
@@ -948,6 +957,9 @@ ${curriculumDataText}
 ${internalLinkText}
 ${primaryDataText}
 ${referenceMaterialText}
+${downloadResourceText}
+${productRecommendationText}
+${isHeatRelatedKeyword(request.keyword) ? HEAT_STEERING_WRITING_INSTRUCTIONS : ''}
 【目標文字数（厳守）】
 記事全体で ${request.targetCharCount || 5500} 文字（±10%以内）。これを超えないこと。
 各セクションは簡潔にまとめ、冗長な表現や繰り返しを避けること。
@@ -979,6 +991,14 @@ ${
 ${
   request.useGrounding
     ? "※ 最新情報はウェブ検索で確認しながら執筆してください。"
+    : ""
+}
+${
+  request.referenceMaterialContext
+    ? `【最終確認（参考資料の反映）】
+上記で提供した【自社独自情報（E-E-A-T強化用・AI分析済み）】の内容を記事本文に必ず反映してください。
+参考資料の独自データ・事例・知見を最低3箇所以上、本文中に具体的に織り込むこと。
+参考資料の情報が1つも反映されていない記事は不合格です。`
     : ""
 }
 `;
@@ -1254,6 +1274,130 @@ async function searchCitationUrl(citationContent: string): Promise<string> {
     console.error("    ❌ 検索エラー:", err);
     return "";
   }
+}
+
+// ダウンロード資料一覧（工場営繕向け）
+// 各資料にはキーワードマッチ用のタグを付与
+const DOWNLOAD_RESOURCES = [
+  {
+    title: "遮熱塗装の省エネ効果シミュレーション集",
+    description: "遮熱塗装導入による年間コスト削減を数値で確認できる資料",
+    url: "https://astec-factory.com/info/2026/03/17/download-simulation/",
+    tags: ["遮熱", "省エネ", "コスト削減", "電気代", "空調", "エネルギー", "光熱費", "断熱"],
+  },
+  {
+    title: "工事メニュー・費用一覧",
+    description: "工場・倉庫の工事メニューと費用情報をまとめた資料",
+    url: "https://astec-factory.com/info/2026/03/12/download-allmenu/",
+    tags: ["費用", "価格", "相場", "見積", "工事費", "予算", "コスト", "修繕費"],
+  },
+  {
+    title: "工場屋根の改修工事進め方BOOK～スレート屋根編～",
+    description: "スレート屋根の改修工事の目安から工法選択、業者選定まで工程を詳細に解説",
+    url: "https://astec-factory.com/info/2026/01/29/download-slate/",
+    tags: ["スレート", "屋根", "改修", "カバー工法", "葺き替え", "アスベスト", "屋根材"],
+  },
+  {
+    title: "熱中症の対応フロー",
+    description: "労働安全衛生規則改正に対応した熱中症対策の実務フロー",
+    url: "https://astec-factory.com/info/2025/09/09/download_flow/",
+    tags: ["熱中症", "暑さ対策", "労働安全", "安全衛生", "WBGT", "夏", "温度"],
+  },
+  {
+    title: "WBGT値啓蒙ポスター",
+    description: "職場での熱中症対策に活用するWBGT値判断と啓発用ポスター",
+    url: "https://astec-factory.com/info/2025/09/04/download_wbgt-poster/",
+    tags: ["WBGT", "熱中症", "ポスター", "暑さ指数", "安全衛生", "職場環境"],
+  },
+  {
+    title: "営繕担当者のやることリスト",
+    description: "工事検討から着工までの担当者実務をリスト化した資料",
+    url: "https://astec-factory.com/info/2025/06/30/download-3/",
+    tags: ["営繕", "担当者", "工事計画", "進め方", "手順", "業者選定", "発注"],
+  },
+  {
+    title: "工場屋根の改修工事進め方BOOK～折板屋根編～",
+    description: "折板屋根の工法選択から業者選定まで改修工事を体系的に解説",
+    url: "https://astec-factory.com/info/2025/05/02/download-2/",
+    tags: ["折板", "屋根", "改修", "カバー工法", "葺き替え", "屋根塗装", "金属屋根"],
+  },
+  {
+    title: "屋根・外壁塗装参考価格表",
+    description: "工場・倉庫の洗浄・塗装工事の費用参考価格を表示した資料",
+    url: "https://astec-factory.com/info/2025/03/03/download_kakakuhyo/",
+    tags: ["塗装", "価格", "費用", "相場", "外壁", "屋根", "見積"],
+  },
+  {
+    title: "工場・倉庫の暑さ対策｜上司に刺さる起案のコツ（稟議書サンプル付）",
+    description: "暑さ対策工事の予算申請を通すための稟議書作成ガイド",
+    url: "https://astec-factory.com/info/2024/12/26/ringi_h/",
+    tags: ["暑さ対策", "稟議", "予算", "申請", "熱中症", "遮熱", "省エネ", "起案"],
+  },
+  {
+    title: "工場・倉庫の雨漏り工事｜上司に刺さる起案のコツ（稟議書サンプル付）",
+    description: "雨漏り工事予算申請用の稟議書サンプルとコツをまとめた資料",
+    url: "https://astec-factory.com/info/2024/12/26/ringi_wp/",
+    tags: ["雨漏り", "防水", "稟議", "予算", "申請", "漏水", "起案", "シーリング"],
+  },
+];
+
+/**
+ * 記事のキーワード・構成と関連するダウンロード資料を選定し、
+ * プロンプト挿入用のテキストを生成する
+ */
+function buildDownloadResourceText(keyword: string, outline: string): string {
+  const combinedText = (keyword + " " + outline).toLowerCase();
+
+  // 各資料のタグマッチ数を計算
+  const scored = DOWNLOAD_RESOURCES.map((resource) => {
+    let score = 0;
+    for (const tag of resource.tags) {
+      if (combinedText.includes(tag)) {
+        score++;
+      }
+    }
+    return { resource, score };
+  });
+
+  // スコア順にソートし、1つ以上マッチした資料を抽出（最大3つ）
+  const matched = scored
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
+
+  // マッチなしでも最低1つは汎用的な資料を提案
+  if (matched.length === 0) {
+    matched.push({ resource: DOWNLOAD_RESOURCES[1], score: 0 }); // 工事メニュー・費用一覧
+  }
+
+  const resourceList = matched
+    .map((item) => `- 「${item.resource.title}」（${item.resource.description}）: ${item.resource.url}`)
+    .join("\n");
+
+  return `
+【ダウンロード資料リンク挿入指示（重要）】
+以下は当サイトで提供している無料ダウンロード資料です。記事の内容に関連する資料へのリンクを本文中に自然な形で挿入してください。
+
+■ 挿入ルール：
+1. 挿入位置: 読者が「もっと詳しく知りたい」と感じるセクション末尾の段落内、または関連する話題の文脈中に設置
+2. 挿入形式: 以下のHTMLブロックを使用すること（<!-- wp:html -->コメントも必ず含める）
+   <!-- wp:html -->
+   <div class="download-cta" style="background:#f0f7ff;border:1px solid #3b82f6;border-radius:8px;padding:16px 20px;margin:16px 0;">
+   <p style="margin:0;font-weight:bold;color:#1d4ed8;">📄参考資料ダウンロード</p>
+   <p style="margin:8px 0 0;">資料の簡潔な紹介文（1文）。<a href="資料URL" target="_blank" rel="noopener">「資料タイトル」を無料でダウンロードする</a></p>
+   </div>
+   <!-- /wp:html -->
+3. 挿入数: 1記事あたり1〜2個（多くても3個まで。過剰な営業感は避ける）
+4. 関連性: そのセクションの話題と資料の内容が明確に関連している場合のみ挿入
+5. 紹介文: 読者の課題を想起させ、資料で解決できることを端的に伝える（押し売り感のない自然な文脈で）
+6. 配置禁止: まとめセクション・FAQセクション内には挿入しない
+
+■ 利用可能な資料一覧：
+${resourceList}
+
+重要：上記リスト内のURLのみを使用すること。存在しないURLは絶対に挿入しないこと。
+掲載可能な資料は https://astec-factory.com/info/category/download/ に掲載されているものに限る。
+`;
 }
 
 // カスタムインストラクションの管理

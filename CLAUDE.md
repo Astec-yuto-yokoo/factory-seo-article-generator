@@ -242,6 +242,17 @@ VITE_SERVICE_NAME / VITE_COMPANY_NAME  # 自社ブランド情報
 
 画像生成エージェント（`ai-article-imager-for-wordpress`）は「お問い合わせ」セクション（H2）に対して画像を生成しない。
 
+### 暑さ対策ステアリング
+
+工場・倉庫の暑さに関連するキーワードを検出した場合、構成生成・執筆プロンプトに遮熱塗装への誘導指示を自動注入する。
+
+- **設定ファイル**: `services/heatSteeringConfig.ts` で判定ロジック・誘導テキストを一元管理
+- **判定関数**: `isHeatRelatedKeyword(keyword)` — 暑さ対策・熱中症・遮熱・断熱・空調等のキーワードパターンで判定
+- **構成生成**: `outlineGeneratorV2.ts` のプロンプトに `HEAT_STEERING_OUTLINE_RULES` を条件注入
+- **執筆**: `writingAgentV3.ts` のプロンプトに `HEAT_STEERING_WRITING_INSTRUCTIONS` を条件注入
+- **内部リンク**: 参考記事 `https://astec-factory.com/info/2022/08/10/hp-2-2/` へのリンクを必ず含める
+- **注意**: このステアリングはfactory専用。姉妹プロジェクトには適用しない
+
 ## Google Drive ADC認証
 
 初回セットアップ（1回のみ）:

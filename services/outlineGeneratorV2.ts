@@ -13,6 +13,7 @@ import type {
 } from '../types';
 import { countCharacters, truncateToLength } from '../utils/characterCounter';
 import { generateTitleHook, generateFullTitle } from '../utils/titleHookGenerator';
+import { isHeatRelatedKeyword, HEAT_STEERING_OUTLINE_RULES } from './heatSteeringConfig';
 // 自社サービス関連のimportは汎用化のため削除
 // import { getCompanyInfo, generateCompanyContext } from './companyService';
 // import { curriculumDataService } from './curriculumDataService';
@@ -636,6 +637,8 @@ ${referenceMaterialContext}
 6. 検索意図を最優先とし、文脈に合わない情報は無理に使用しない
 7. 執筆メモに反映する際は「自社資料より」と出典を明記
 ` : ''}
+
+${isHeatRelatedKeyword(keyword) ? HEAT_STEERING_OUTLINE_RULES : ''}
 
 【要件】
 構成要件:
