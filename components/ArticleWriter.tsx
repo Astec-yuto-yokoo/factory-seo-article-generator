@@ -125,6 +125,7 @@ interface ArticleWriterProps {
     autoMode?: boolean;
   }) => void; // 画像生成エージェントをiframeで開く
   referenceMaterialContext?: string; // 参考資料テキスト（任意）
+  sectionReferenceMaterials?: Record<number, string[]>;
 }
 
 const ArticleWriter: React.FC<ArticleWriterProps> = ({
@@ -141,6 +142,7 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
   skipAutoGenerate = false,
   onOpenImageAgent,
   referenceMaterialContext,
+  sectionReferenceMaterials,
 }) => {
   // デバッグ：受け取ったデータを確認
   console.log("ArticleWriter received:", {
@@ -341,6 +343,7 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
           tone: "professional",
           useGrounding: true, // Grounding機能有効（最新情報を検索しながら執筆）
           referenceMaterialContext: referenceMaterialContext,
+          sectionReferenceMaterials: sectionReferenceMaterials,
           targetCharCount: targetChars,
         });
 
