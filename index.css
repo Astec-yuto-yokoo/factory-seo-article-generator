@@ -90,6 +90,23 @@ code {
   margin: 5px 0;
 }
 
+/* 出典（Snow Monkey Editor 文字サイズS／注釈サイズ） */
+.article-content small,
+.article-content .source-citation,
+.article-content .sme-font-size.has-small-font-size,
+.article-content .has-small-font-size {
+  font-size: 0.8em;
+  color: #6b7280;
+}
+
+.article-content .source-citation a,
+.article-content small a,
+.article-content .sme-font-size.has-small-font-size a {
+  font-size: inherit;
+  color: inherit;
+  text-decoration: underline;
+}
+
 /* 記事内テーブルスタイル */
 .article-content table {
   width: 100%;

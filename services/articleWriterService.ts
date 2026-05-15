@@ -196,7 +196,7 @@ ${frequencyWordInstruction}
    - 良い例：「私はケーキを作った。それをあなたにあげた。」（1文1動作）
 4. 同じ語尾の3回以上の繰り返しは禁止（です・ます・でしょう等）
 5. 専門的な内容や数値情報には出典を明記
-   - 形式：（出典：<a href="URL" target="_blank" rel="noopener">記事タイトル</a>）
+   - 形式：<span class="sme-font-size has-small-font-size">（出典：<a href="URL" target="_blank" rel="noopener">記事タイトル</a>）</span>（Snow Monkey Editor 文字サイズSで注釈表示）
 6. 段落分けの基準：
    - 話題が変わるとき
    - 視点が変わるとき（総論→各論、メリット→デメリット等）
