@@ -324,19 +324,19 @@ CONSTRUCTION & PAINTING SITE SAFETY RULES (apply ONLY when the scene actually in
 === SCAFFOLDING (足場) ===
 1. TYPE: Use "kusabi (vike) scaffolding" — interlocking wedge-type scaffolding commonly used in Japanese residential renovation. For buildings wider than 1m work area, use "hon-ashiba" (double-row scaffolding) with two rows of vertical posts for maximum stability.
 2. COVERAGE: Scaffolding MUST fully enclose the entire building facade from ground level to at least 1 meter ABOVE the eaves/roofline. No partial scaffolding — every wall face being worked on must be fully covered.
-3. SAFETY FEATURES: Handrails at 85cm or higher on all working platforms, plus mid-rails. Toe boards at least 10cm high at the base of each platform. Diagonal cross-bracing between vertical posts.
-4. WORK PLATFORM: Clean and clear — no paint cans, tools, or materials left on the scaffolding floor.
+3. SAFETY FEATURES (労働安全衛生規則 compliant, whenever a platform is visible): the OUTER edge has TWO horizontal scaffold pipes — a top handrail at 85–95cm AND a mid-rail (中桟) at 35–50cm — plus a toe board (幅木) at least 10cm high at the base, and diagonal cross-bracing between vertical posts. NEVER show a platform with an open outer edge or only one rail.
+4. WORK PLATFORM: NARROW foot boards (踏板) about 40cm wide, not a wide deck; the gap between the boards and the building wall is SMALL, about 10cm (≤12cm). Clean and clear — no paint cans, tools, or materials left on the scaffolding floor.
 
 === SPLASH PREVENTION SHEETS (飛散防止シート) ===
 5. For ANY pressure washing or painting scene, the ENTIRE scaffolding must be wrapped in gray or white mesh splash-prevention sheets.
-6. Sheet requirements: All grommet ties securely fastened with NO gaps between sheets. Sheets extend from nearly ground level up to at least 1 meter above the eaves. No loose or flapping sections.
+6. Sheet requirements: The mesh sheet MUST be securely TIED/LACED to the scaffold pipes with binding ropes/bands (緊結ロープ・結束バンド) at EVERY grommet (ハトメ) and along every edge, spaced at regular intervals (roughly every 30–50cm). Each visible tie is knotted to a scaffold pipe; NO gaps between sheets, and NEVER show loose, untied, dangling, or flapping ropes or detached sheet edges. Sheets extend from nearly ground level up to at least 1 meter above the eaves and stay taut.
 7. For airless spray painting, use DOUBLE-LAYER sheets.
 
 === HARNESS & FALL PROTECTION (フルハーネス型墜落制止用器具) ===
 8. Workers at ANY height on scaffolding MUST wear a full-body harness — NOT an old-style waist belt.
 9. Full-body harness anatomy (front view, top to bottom): shoulder straps (肩ベルト) running over both shoulders, a detachable connector strap (着脱式連結ベルト) joining the shoulder straps at upper chest, a chest strap/buckle (胸ベルト) across the mid-chest, a waist belt (胴ベルト) around the torso, and leg/thigh straps (腿ベルト) looping around each thigh with a pelvic belt (骨盤ベルト) connecting them at the lower back.
-10. Full-body harness anatomy (rear view): a single D-ring (D環) mounted at the center of the upper back between the shoulder blades where the shoulder straps converge. A lanyard (ランヤード) connects from this D-ring, incorporating a shock absorber (ショックアブソーバー) midway, and terminates in a carabiner hook (フック) that attaches to an anchor point on the scaffolding ABOVE the worker.
-11. All harness straps must appear taut and fitted — not loose or baggy. The lanyard must be visibly routed from the back D-ring upward to an overhead anchor — never coiled at the waist or dangling at the side.
+10. Full-body harness anatomy (rear view): a single D-ring (D環) mounted at the center of the upper back between the shoulder blades where the shoulder straps converge. A lanyard (ランヤード) connects from this D-ring, incorporating a shock absorber (ショックアブソーバー) midway, and terminates in a carabiner hook (フック) that attaches to an overhead anchor point on the scaffolding ABOVE the worker (as high as possible to minimize fall distance).
+11. All harness straps must appear taut and fitted — not loose or baggy. The lanyard starts at the dorsal D-ring on the BACK (center upper-back, between the shoulder blades) and is routed UP to an overhead anchor. NEVER attach the lanyard to the shoulder, chest, or arm, never hook it at waist level, and never coil it at the waist or leave it dangling.
 
 === WORKER ATTIRE (安全な服装) ===
 11. HELMET: SG-rated safety helmet with chin strap securely fastened under the chin. No towels wrapped under the helmet.
@@ -353,7 +353,11 @@ NEGATIVE PROMPT (absolutely NEVER generate these):
 - Gaps or loose sections in splash-prevention sheets
 - Workers without full-body harness on scaffolding
 - Waist-only safety belts — these are outdated and prohibited
-- Harness lanyards hanging loose, coiled at the waist, or not connected to overhead anchor points
+- Harness lanyards hanging loose, coiled at the waist, hooked at waist level, or not connected to an overhead anchor point
+- Lanyard/rope attached to the shoulder, chest, or arm instead of the back D-ring
+- A scaffold platform with only one rail or a completely open outer edge (needs top rail 85cm+ AND mid-rail 35–50cm)
+- A wide gap between the foot board and the building wall (should be about 10cm)
+- Splash-prevention sheets with loose, untied, or dangling ropes, or edges not bound to the scaffold
 - Harness with no visible D-ring on the upper back
 - Harness straps that look like simple ropes or single lines instead of proper flat webbing belts
 - Shoulder straps missing or not clearly running over both shoulders
