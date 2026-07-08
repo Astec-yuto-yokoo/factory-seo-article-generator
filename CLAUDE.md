@@ -26,7 +26,8 @@ curl http://localhost:3002/api/health
 |----------|------|
 | フロントエンド | React 19, Vite 6, TypeScript, Tailwind CSS |
 | バックエンド | Node.js, Express 4 |
-| AI（構成・執筆・修正） | Gemini 2.5 Pro（`@google/generative-ai`） |
+| AI（競合分析・構成・修正） | Gemini 2.5 Pro / 2.5 Flash（`@google/generative-ai`） |
+| AI（執筆） | Claude Opus 4.8（`@anthropic-ai/sdk`、ストリーミング） |
 | AI（最終校閲） | GPT-5 / gpt-5-mini / gpt-5-nano（OpenAI Responses API） |
 | AI（MoA相互検証） | Claude（`@anthropic-ai/sdk`） |
 | スクレイピング | Puppeteer（開発）/ puppeteer-core + @sparticuz/chromium（本番） |
@@ -123,7 +124,7 @@ GEMINI_API_KEY / VITE_GEMINI_API_KEY   # Gemini API（必須）
 GOOGLE_API_KEY                         # Custom Search API（必須）
 GOOGLE_SEARCH_ENGINE_ID                # カスタム検索エンジンID（必須）
 OPENAI_API_KEY                         # GPT-5最終校閲用
-ANTHROPIC_API_KEY                      # Claude MoA相互検証用
+ANTHROPIC_API_KEY / VITE_ANTHROPIC_API_KEY  # Claude（執筆=Opus 4.8 / MoA相互検証）用。執筆はブラウザ実行のためVITE_版が必須
 INTERNAL_API_KEY / VITE_INTERNAL_API_KEY
 COMPANY_DATA_FOLDER_ID                 # Google DriveフォルダID
 WP_BASE_URL / WP_USERNAME / WP_APP_PASSWORD  # WordPress連携
@@ -155,13 +156,13 @@ VITE_SERVICE_NAME / VITE_COMPANY_NAME  # 自社ブランド情報
 
 ## 記事文字数制御
 
-- **目標**: 5,000〜6,000文字（デフォルト5,500文字）
+- **目標**: 6,000〜8,000文字（デフォルト7,000文字、上限8,000文字でキャップ）
 - `writingAgentV3.ts` の `WritingRequest.targetCharCount` で制御
-- `ArticleWriter.tsx` で `characterCountAnalysis.average` を上限6,000でキャップして渡す
-- プロンプトで「±10%以内、超過禁止」と明示指示
-- `maxOutputTokens: 8192` でトークン上限も制限
+- `ArticleWriter.tsx` で `characterCountAnalysis.average` を上限8,000でキャップして渡す
+- プロンプトで「8,000文字を超えないこと」と明示指示
+- **執筆モデルは Claude Opus 4.8**（`messages.stream` でストリーミング受信）。`CLAUDE_WRITING_MAX_TOKENS = 24000` でトークン上限を制限
 - **1段落（`<p>`タグ）あたり最大140字**を厳守。超える場合は分割する
-- **注意**: `maxOutputTokens` や `length_control`、段落文字数上限のプロンプト文言を勝手に緩和しないこと
+- **注意**: `CLAUDE_WRITING_MAX_TOKENS` や `length_control`、段落文字数上限のプロンプト文言を勝手に緩和しないこと
 
 ## H2ブロック単位修正機能
 
@@ -182,7 +183,7 @@ VITE_SERVICE_NAME / VITE_COMPANY_NAME  # 自社ブランド情報
   → 競合調査（competitorResearchWithWebFetch → scraping-server）
   → 構成生成V2（outlineGeneratorV2 → outlineCheckerV2）
   → [任意] 構成案H2修正（reviseOutlineSection）
-  → 執筆（writingAgentV3: Gemini 2.5 Pro + Grounding、目標5000〜6000文字）
+  → 執筆（writingAgentV3: Claude Opus 4.8 ストリーミング、目標6000〜8000文字。事実確認は構成段階＋最終校閲に委譲）
   → 執筆チェック（writingCheckerV3）
   → [任意] 本文H2修正（reviseArticleH2Section）
   → 最終校閲マルチエージェント

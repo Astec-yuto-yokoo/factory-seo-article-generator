@@ -2,11 +2,13 @@
 // 構成案を基に高品質な記事を自動生成
 //
 // 現在の実装状況:
-// - Gemini 2.5 Pro（GA版）を使用
-// - Grounding機能有効（Google検索で最新情報を取得）
+// - 執筆モデルは Claude Opus 4.8（ストリーミング受信）
+// - 事実確認は構成段階のGeminiグラウンディング＋最終校閲に委譲（執筆時の検索は行わない）
 // - カスタムインストラクション機能を強化
+// - 構成生成・チェック・修正は引き続きGemini（generateSectionV3もGeminiのまま）
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import Anthropic from "@anthropic-ai/sdk";
 import { companyDataService } from "./companyDataService";
 import { curriculumDataService } from "./curriculumDataService";
 import { getContextForKeywords, isSupabaseAvailable } from "./primaryDataService";
@@ -34,6 +36,22 @@ if (!API_KEY) {
 
 console.log("✅ Gemini API初期化成功");
 const genAI = new GoogleGenerativeAI(API_KEY);
+
+// 執筆はClaude Opus 4.8を使用（競合分析・構成案・チェックはGeminiのまま）
+const ANTHROPIC_API_KEY =
+  import.meta.env.VITE_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
+const anthropic = ANTHROPIC_API_KEY
+  ? new Anthropic({ apiKey: ANTHROPIC_API_KEY, dangerouslyAllowBrowser: true })
+  : null;
+// 執筆モデルは環境変数で切替可能（未指定時はOpus 4.8）。コスト重視なら claude-sonnet-4-6
+const CLAUDE_WRITING_MODEL =
+  import.meta.env.VITE_CLAUDE_WRITING_MODEL || "claude-opus-4-8";
+// 目標6,000〜8,000文字（上限8,000）。日本語8,000字≒約12,000トークンのため余裕を持たせる
+const CLAUDE_WRITING_MAX_TOKENS = 24000;
+console.log(
+  "🔑 Claude(執筆)APIキー:",
+  ANTHROPIC_API_KEY ? "利用可能" : "未設定"
+);
 
 // SEOコンテンツ執筆のカスタムインストラクション（三段セルフリファイン + ファクトチェック強化版）
 const WRITING_INSTRUCTIONS = `
@@ -576,11 +594,11 @@ interface WritingRequest {
   keyword: string; // ターゲットキーワード
   targetAudience?: string; // ターゲット読者
   tone?: "formal" | "casual" | "professional";
-  useGrounding?: boolean; // Grounding機能を使うか
+  useGrounding?: boolean; // （旧Gemini用）執筆はClaude化したため未使用。互換のため残置
   useCompanyData?: boolean; // 自社データを使うか
   useCurriculum?: boolean; // カリキュラムデータを使うか
   referenceMaterialContext?: string; // 参考資料テキスト（任意）
-  targetCharCount?: number; // 目標文字数（指定なしの場合デフォルト5500）
+  targetCharCount?: number; // 目標文字数（指定なしの場合デフォルト7000、目安6,000〜8,000・上限8,000）
 }
 
 // 内部リンクマップを取得する関数（スプレッドシート由来）
@@ -906,34 +924,13 @@ ${request.referenceMaterialContext}
       console.log("⏭️ [1.8/4] スキップ: 参考資料なし");
     }
 
-    // モデル設定
-    const modelConfig: any = {
-      model: "gemini-2.5-pro",
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 8192,
-        topP: 0.9,
-      },
-    };
-
-    // Grounding機能（Google検索による最新情報取得）
-    // 無料枠：
-    // - Google AI Studio: 完全無料（1日1,500クエリまで）
-    // - Vertex AI: 1日10,000クエリ無料（その後$35/1000クエリ）
-    if (request.useGrounding) {
-      modelConfig.tools = [
-        {
-          googleSearch: {}, // Gemini 2.0以降の新形式
-        },
-      ];
-      console.log(
-        "\n🔄 [2/4] Grounding機能を有効化（最新情報を検索しながら執筆）"
+    // 執筆モデル: Claude Opus 4.8（事実確認は構成段階のGeminiグラウンディング＋最終校閲に委譲）
+    if (!anthropic) {
+      throw new Error(
+        "Claude APIキー(ANTHROPIC_API_KEY / VITE_ANTHROPIC_API_KEY)が未設定です。執筆を実行できません。"
       );
-    } else {
-      console.log("\n⏭️ [2/4] スキップ: Grounding機能未使用");
     }
-
-    const model = genAI.getGenerativeModel(modelConfig);
+    console.log(`\n🔄 [2/4] 執筆モデル: ${CLAUDE_WRITING_MODEL}`);
 
     console.log("\n🔄 [3/4] プロンプト構築中...");
 
@@ -955,7 +952,7 @@ ${internalLinkText}
 ${primaryDataText}
 ${referenceMaterialText}
 【目標文字数（厳守）】
-記事全体で ${request.targetCharCount || 5500} 文字（±10%以内）。これを超えないこと。
+記事全体で ${request.targetCharCount || 7000} 文字（目安6,000〜8,000文字、上限8,000文字）。8,000文字を超えないこと。
 各セクションは簡潔にまとめ、冗長な表現や繰り返しを避けること。
 
 【執筆指示】
@@ -982,18 +979,13 @@ ${
 - 企業名、数値、成果内容は提供されたデータのまま使用すること（改変禁止）`
     : ""
 }
-${
-  request.useGrounding
-    ? "※ 最新情報はウェブ検索で確認しながら執筆してください。"
-    : ""
-}
 `;
 
     console.log("✅ [3/4] 完了: プロンプト構築完了");
 
     // 記事生成
-    console.log("\n🔄 [4/4] AI執筆中...");
-    console.log("⏳ 予想時間: 約30-60秒");
+    console.log(`\n🔄 [4/4] ${CLAUDE_WRITING_MODEL} 執筆中...`);
+    console.log("⏳ 予想時間: 約60-120秒");
 
     const generationStartTime = Date.now();
 
@@ -1006,11 +998,24 @@ ${
     }, 10000);
 
     try {
-      const result = await model.generateContent(prompt);
+      // 大きめのmax_tokensのためストリーミングで受信（HTTPタイムアウト回避）
+      const stream = anthropic.messages.stream({
+        model: CLAUDE_WRITING_MODEL,
+        max_tokens: CLAUDE_WRITING_MAX_TOKENS,
+        messages: [{ role: "user", content: prompt }],
+      } as any);
+      const claudeMessage = await stream.finalMessage();
       clearInterval(progressInterval);
 
-      const response = result.response;
-      var text = response.text();
+      // テキストブロックのみ連結
+      var text = "";
+      if (claudeMessage && claudeMessage.content) {
+        for (const block of claudeMessage.content) {
+          if (block && block.type === "text") {
+            text += block.text;
+          }
+        }
+      }
 
       // 出典テキストをGoogle検索してURLリンクを後付け挿入
       text = await searchAndInsertCitationLinks(text);
