@@ -370,10 +370,10 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
     try {
       let generatedArticle;
 
-      // Ver.3モードの場合（Gemini Pro + Grounding）
+      // Ver.3モードの場合（Claude執筆）
       if (writingMode === "v3") {
         setGenerationProgress(
-          "Ver.3モード（Gemini Pro + Grounding）で記事を生成中..."
+          "Ver.3モード（Claude で執筆中）..."
         );
 
         // テスト構成(Ver.2)からの実行の場合、outlineがnullの可能性があるので確認
