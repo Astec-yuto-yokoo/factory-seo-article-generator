@@ -254,6 +254,21 @@ Gemini APIキーをブラウザに露出させない。実キーは**サーバ�
 | `services/writingAgentV3.ts` | `fixWordPressListBlocks()` | 記事執筆の最終出力時 |
 | `services/articleRevisionService.ts` | `fixWordPressListBlocksRevision()` | 記事修正の最終出力時 |
 
+## 戦略的キーワード選定機能（apamanから移植）
+
+デフォルト画面は上位タブ「原稿作成 / キーワード選定」（`App.tsx` の `mainMode` state）に分かれる。
+
+- **サービス**: `services/strategicKeywordService.ts`
+  - `generateStrategicKeywords()` — テーマ起点で「競合キーワード調査／自社キーワード分析／市場環境」の3観点KWリストを生成（Gemini `gemini-flash-latest` + Google検索グラウンディング、temperature 1.0）
+  - `generateTrendKeywords()` — 時事ニュース起点のキーワード抽出（ニュースジャッキング）
+  - `strategicKeywordsToCsv()` / `trendKeywordsToCsv()` — CSV変換（BOM付き）
+  - 対象ドメイン既定値は「工場・倉庫の外壁塗装・屋根塗装・改修」。`VITE_KEYWORD_DOMAIN` で上書き可
+  - 自社ブランド情報は `VITE_SERVICE_NAME` / `VITE_COMPANY_NAME` / `VITE_COMPANY_SITE_URL` / `VITE_COMPANY_MEDIA_URL` から取得
+  - JSON抽出の堅牢化（コードフェンス除去→最初の`{`〜最後の`}`抽出→`cleanJsonString`で制御文字を空白化）を**省略・簡略化してはならない**
+- **UI**: `components/StrategicKeywordTab.tsx`（3観点表示）、`components/TrendKeywordSection.tsx`（時事ネタ表示）
+- **引き継ぎ**: 各候補KWの「このKWで原稿作成 →」→ `handleUseKeywordForArticle` が `articleSeedKeyword` を設定し原稿作成タブへ切替。`KeywordInputForm` の `initialKeyword` prop（useEffectで同期）が入力欄へ反映
+- 型定義は `types.ts` 末尾（`KeywordIntent` / `StrategicKeyword` / `StrategicKeywordList` / `TrendKeyword` / `TrendKeywordList`）
+
 ## factory 専用カスタマイズ
 
 ### 記事末尾のお問い合わせフォーム
