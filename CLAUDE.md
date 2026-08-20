@@ -262,7 +262,7 @@ Gemini APIキーをブラウザに露出させない。実キーは**サーバ�
   - `generateStrategicKeywords()` — テーマ起点で「競合キーワード調査／自社キーワード分析／市場環境」の3観点KWリストを生成（Gemini `gemini-flash-latest` + Google検索グラウンディング、temperature 1.0）
   - `generateTrendKeywords()` — 時事ニュース起点のキーワード抽出（ニュースジャッキング）
   - `strategicKeywordsToCsv()` / `trendKeywordsToCsv()` — CSV変換（BOM付き）
-  - 対象ドメイン既定値は「工場・倉庫の外壁塗装・屋根塗装・改修」。`VITE_KEYWORD_DOMAIN` で上書き可
+  - 対象ドメイン既定値は「工場・倉庫・畜舎・学校など大型施設の外壁塗装・屋根塗装・改修」。`VITE_KEYWORD_DOMAIN` で上書き可
   - 自社ブランド情報は `VITE_SERVICE_NAME` / `VITE_COMPANY_NAME` / `VITE_COMPANY_SITE_URL` / `VITE_COMPANY_MEDIA_URL` から取得
   - JSON抽出の堅牢化（コードフェンス除去→最初の`{`〜最後の`}`抽出→`cleanJsonString`で制御文字を空白化）を**省略・簡略化してはならない**
 - **UI**: `components/StrategicKeywordTab.tsx`（3観点表示）、`components/TrendKeywordSection.tsx`（時事ネタ表示）
@@ -270,6 +270,16 @@ Gemini APIキーをブラウザに露出させない。実キーは**サーバ�
 - 型定義は `types.ts` 末尾（`KeywordIntent` / `StrategicKeyword` / `StrategicKeywordList` / `TrendKeyword` / `TrendKeywordList`）
 
 ## factory 専用カスタマイズ
+
+### プロンプト内のメディア文脈（apaman混入禁止）
+
+本プロジェクトは apaman 版からの移植のため、プロンプト内にアパマン向け文言（「アパマン修繕サービス」「マンションオーナー」「大規模修繕」「修繕積立金」等）が混入するとタイトル・見出し・本文がアパマン向けになる。以下を factory 向け（工場・倉庫・畜舎・学校など大型施設の外壁塗装・屋根塗装・改修／読者＝大型施設のオーナー、施設管理・総務担当者、経営者。キーワードに施設種別がない場合のデフォルト文脈は工場・倉庫）に維持すること：
+
+- `services/outlineGeneratorV2.ts` — メインプロンプト冒頭の【掲載メディアの文脈（絶対厳守）】ブロック、クリック率向上テクニックの「良い例」、まとめH2の `writingNote`
+- `services/writingAgentV3.ts` — `audience`（2箇所）、まとめセクションのOK例
+- `services/articleRevisionService.ts` — `audience`・読者定義
+
+apaman / zeenb からコードを移植・同期する際は、上記のプロンプト文言を上書きしないよう注意（機能コードのみ同期し、メディア文脈は各プロジェクト固有）。
 
 ### 記事末尾のお問い合わせフォーム
 
