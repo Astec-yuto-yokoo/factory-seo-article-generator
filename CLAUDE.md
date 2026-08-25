@@ -26,7 +26,9 @@ curl http://localhost:3002/api/health
 |----------|------|
 | フロントエンド | React 19, Vite 6, TypeScript, Tailwind CSS |
 | バックエンド | Node.js, Express 4 |
-| AI（構成・執筆・修正） | Gemini 2.5 Pro（`@google/generative-ai`） |
+| AI（競合分析・本文修正） | Gemini 2.5 Pro / 2.5 Flash（`@google/generative-ai`） |
+| AI（構成案生成） | Claude Sonnet 4.6（`@anthropic-ai/sdk`、`VITE_CLAUDE_OUTLINE_MODEL`で切替可） |
+| AI（執筆） | Claude（既定Opus 4.8 / `.env`でSonnet 4.6に切替中、`VITE_CLAUDE_WRITING_MODEL`） |
 | AI（最終校閲） | GPT-5 / gpt-5-mini / gpt-5-nano（OpenAI Responses API） |
 | AI（MoA相互検証） | Claude（`@anthropic-ai/sdk`） |
 | スクレイピング | Puppeteer（開発）/ puppeteer-core + @sparticuz/chromium（本番） |
@@ -119,11 +121,11 @@ const response = await (openai as any).responses.create({
 ## 環境変数
 
 ```
-GEMINI_API_KEY / VITE_GEMINI_API_KEY   # Gemini API（必須）
-GOOGLE_API_KEY                         # Custom Search API（必須）
+GEMINI_API_KEY                         # Gemini API（必須）。サーバー側のみ。VITE_版は廃止（下記セキュリティ参照）
+GOOGLE_API_KEY                         # Custom Search / Drive API（必須）。サーバー側のみ。VITE_版は廃止
 GOOGLE_SEARCH_ENGINE_ID                # カスタム検索エンジンID（必須）
 OPENAI_API_KEY                         # GPT-5最終校閲用
-ANTHROPIC_API_KEY                      # Claude MoA相互検証用
+ANTHROPIC_API_KEY / VITE_ANTHROPIC_API_KEY  # Claude（執筆=Opus 4.8 / MoA相互検証）用。執筆はブラウザ実行のためVITE_版が必須
 INTERNAL_API_KEY / VITE_INTERNAL_API_KEY
 COMPANY_DATA_FOLDER_ID                 # Google DriveフォルダID
 WP_BASE_URL / WP_USERNAME / WP_APP_PASSWORD  # WordPress連携
@@ -131,7 +133,26 @@ SLACK_WEBHOOK_URL
 VITE_SERVICE_NAME / VITE_COMPANY_NAME  # 自社ブランド情報
 ```
 
-`VITE_` プレフィックスのある変数のみブラウザ側で参照可能。
+`VITE_` プレフィックスのある変数のみブラウザ側で参照可能。**＝ `VITE_` を付けた秘密鍵はビルド時にJSバンドルへ平文で焼き込まれ、誰でも閲覧できる。** APIキー類に `VITE_` を付けてはならない。
+
+## Gemini APIキーのサーバー側化（絶対厳守）
+
+Gemini APIキーをブラウザに露出させない。実キーは**サーバー(`/api/gemini-proxy`)側のみ**が保持する。
+
+- **経路**: フロントの `@google/generative-ai` SDK は `vite.config.ts` の `resolve.alias`（`/^@google\/generative-ai$/` → `services/geminiSdkShim.ts`）で差し替えられ、全リクエストが `baseUrl: /api/gemini-proxy` 経由になる
+- **シム**: `services/geminiSdkShim.ts` が `GoogleGenerativeAI` を継承し、ダミーキーで生成＋`getGenerativeModel` に `baseUrl` と `x-api-key`（内部認証）を注入。実体SDKは `../node_modules/@google/generative-ai/dist/index.mjs` を相対パス参照（alias無限ループ回避・exports制約回避）
+- **サーバー**: `server/scraping-server.js` の `app.use("/api/gemini-proxy", authenticate, ...)` が `x-goog-api-key: process.env.GEMINI_API_KEY` を注入して Google へ転送。`authenticate` 適用・グローバル `apiLimiter` より前に登録（1記事で多数のGemini呼び出しが正当に発生するためレート制限対象外）。生成呼び出しタイムアウト180秒を付与
+- **vite.config.ts**: `define` には実キーを入れず、ダミー文字列 `GEMINI_CLIENT_PLACEHOLDER`（30字以上・"PLACEHOLDER"非含有）を `process.env.GEMINI_API_KEY` / `process.env.API_KEY` に注入。各サービスの起動時ガードを通し、`process.env.*` 参照のReferenceErrorを防ぐため。**この仕組み（alias/シム/プロキシ/ダミー注入）を削除・無効化してはならない**
+- **`.env` に `VITE_GEMINI_API_KEY` / `VITE_GOOGLE_API_KEY` を復活させてはならない**（Viteが自動でバンドルへ焼き込むため）
+- 3プロジェクト共通反映対象（apaman / zeenb / factory）
+- **画像生成エージェント（`ai-article-imager-for-wordpress`）もプロキシ化済み**（本体とは別SDK `@google/genai` を使用）:
+  - **シム**: `services/geminiClient.ts` の `createProxiedGenAI()` が `GoogleGenAI` を `httpOptions.baseUrl = <VITE_API_URL>/gemini-proxy`（例: `http://localhost:3002/api/gemini-proxy`）＋ `headers: { "x-api-key": 内部キー }` で生成。ダミーキー `server-proxied-gemini-no-client-key` を渡し、実キーは持たせない。genai は URL を `{baseUrl}/{apiVersion(=v1beta)}/{path}` で組むため既存 `/api/gemini-proxy`（マウント部を剥がして Google へ転送）をそのまま流用できる
+  - **利用側**: `services/geminiService.ts` の `aiClients = [createProxiedGenAI()]`（実質シングルキー運用で従来挙動を維持）、`services/imageAnalyzer.ts` の `ai = createProxiedGenAI()`、`utils/filenameBasedMatcher.ts` も同様。**`new GoogleGenAI({ apiKey })` を直接生成してはならない**
+  - **vite.config.ts**: `define` の `process.env.API_KEY` / `process.env.GEMINI_API_KEY` には実キーを入れず、ダミー文字列（`gemini-image-agent-proxied-no-client-key`）のみ注入。**`env.GEMINI_API_KEY` を焼き込む旧記述に戻してはならない**
+  - CORS は各サーバーの `allowedOrigins` に画像エージェントのオリジン（5179 / 5177 / 5181）を登録済み。**この仕組みを削除・無効化してはならない**。3プロジェクト共通反映対象
+  - CORS の `allowedHeaders` に **`x-goog-api-key` / `x-goog-api-client` を含めること**（genai SDK が付与するため）。無いとブラウザのプリフライトで弾かれ画像生成が `Failed to fetch` になる。**これらを削除してはならない**
+  - factory は `repo/ai-article-imager-for-wordpress/` 配下（ネスト構造）が対象
+- **未対応（別途要ローテーション）**: Anthropic・OpenAI・Serper の `VITE_` 版は依然ブラウザ露出。同様のサーバー側化が望ましい
 
 ## 見出し番号付与ルール（絶対厳守）
 
@@ -155,18 +176,18 @@ VITE_SERVICE_NAME / VITE_COMPANY_NAME  # 自社ブランド情報
 
 ## 記事文字数制御
 
-- **目標**: 5,000〜6,000文字（デフォルト5,500文字）
+- **目標**: 6,000〜8,000文字（デフォルト7,000文字、上限8,000文字でキャップ）
 - `writingAgentV3.ts` の `WritingRequest.targetCharCount` で制御
-- `ArticleWriter.tsx` で `characterCountAnalysis.average` を上限6,000でキャップして渡す
-- プロンプトで「±10%以内、超過禁止」と明示指示
-- `maxOutputTokens: 8192` でトークン上限も制限
+- `ArticleWriter.tsx` で `characterCountAnalysis.average` を上限8,000でキャップして渡す
+- プロンプトで「8,000文字を超えないこと」と明示指示
+- **執筆モデルは Claude Opus 4.8**（`messages.stream` でストリーミング受信）。`CLAUDE_WRITING_MAX_TOKENS = 24000` でトークン上限を制限
 - **1段落（`<p>`タグ）あたり最大140字**を厳守。超える場合は分割する
-- **注意**: `maxOutputTokens` や `length_control`、段落文字数上限のプロンプト文言を勝手に緩和しないこと
+- **注意**: `CLAUDE_WRITING_MAX_TOKENS` や `length_control`、段落文字数上限のプロンプト文言を勝手に緩和しないこと
 
 ## H2ブロック単位修正機能
 
 ### 構成案H2修正（構成生成後・執筆前）
-- `services/outlineGeneratorV2.ts` の `reviseOutlineSection()` — 対象H2セクションの構成をGemini 2.5 Proで修正
+- `services/outlineGeneratorV2.ts` の `reviseOutlineSection()` — 対象H2セクションの構成をClaude Sonnet 4.6で修正
 - `components/OutlineDisplayV2.tsx` — 各H2ブロック下にtextarea＋「AI修正」ボタン
 - `App.tsx` — `onOutlineUpdate` コールバックで構成案stateを更新
 
@@ -182,7 +203,7 @@ VITE_SERVICE_NAME / VITE_COMPANY_NAME  # 自社ブランド情報
   → 競合調査（competitorResearchWithWebFetch → scraping-server）
   → 構成生成V2（outlineGeneratorV2 → outlineCheckerV2）
   → [任意] 構成案H2修正（reviseOutlineSection）
-  → 執筆（writingAgentV3: Gemini 2.5 Pro + Grounding、目標5000〜6000文字）
+  → 執筆（writingAgentV3: Claude Opus 4.8 ストリーミング、目標6000〜8000文字。事実確認は構成段階＋最終校閲に委譲）
   → 執筆チェック（writingCheckerV3）
   → [任意] 本文H2修正（reviseArticleH2Section）
   → 最終校閲マルチエージェント
@@ -233,7 +254,32 @@ VITE_SERVICE_NAME / VITE_COMPANY_NAME  # 自社ブランド情報
 | `services/writingAgentV3.ts` | `fixWordPressListBlocks()` | 記事執筆の最終出力時 |
 | `services/articleRevisionService.ts` | `fixWordPressListBlocksRevision()` | 記事修正の最終出力時 |
 
+## 戦略的キーワード選定機能（apamanから移植）
+
+デフォルト画面は上位タブ「原稿作成 / キーワード選定」（`App.tsx` の `mainMode` state）に分かれる。
+
+- **サービス**: `services/strategicKeywordService.ts`
+  - `generateStrategicKeywords()` — テーマ起点で「競合キーワード調査／自社キーワード分析／市場環境」の3観点KWリストを生成（Gemini `gemini-flash-latest` + Google検索グラウンディング、temperature 1.0）
+  - `generateTrendKeywords()` — 時事ニュース起点のキーワード抽出（ニュースジャッキング）
+  - `strategicKeywordsToCsv()` / `trendKeywordsToCsv()` — CSV変換（BOM付き）
+  - 対象ドメイン既定値は「工場・倉庫・畜舎・学校など大型施設の外壁塗装・屋根塗装・改修」。`VITE_KEYWORD_DOMAIN` で上書き可
+  - 自社ブランド情報は `VITE_SERVICE_NAME` / `VITE_COMPANY_NAME` / `VITE_COMPANY_SITE_URL` / `VITE_COMPANY_MEDIA_URL` から取得
+  - JSON抽出の堅牢化（コードフェンス除去→最初の`{`〜最後の`}`抽出→`cleanJsonString`で制御文字を空白化）を**省略・簡略化してはならない**
+- **UI**: `components/StrategicKeywordTab.tsx`（3観点表示）、`components/TrendKeywordSection.tsx`（時事ネタ表示）
+- **引き継ぎ**: 各候補KWの「このKWで原稿作成 →」→ `handleUseKeywordForArticle` が `articleSeedKeyword` を設定し原稿作成タブへ切替。`KeywordInputForm` の `initialKeyword` prop（useEffectで同期）が入力欄へ反映
+- 型定義は `types.ts` 末尾（`KeywordIntent` / `StrategicKeyword` / `StrategicKeywordList` / `TrendKeyword` / `TrendKeywordList`）
+
 ## factory 専用カスタマイズ
+
+### プロンプト内のメディア文脈（apaman混入禁止）
+
+本プロジェクトは apaman 版からの移植のため、プロンプト内にアパマン向け文言（「アパマン修繕サービス」「マンションオーナー」「大規模修繕」「修繕積立金」等）が混入するとタイトル・見出し・本文がアパマン向けになる。以下を factory 向け（工場・倉庫・畜舎・学校など大型施設の外壁塗装・屋根塗装・改修／読者＝大型施設のオーナー、施設管理・総務担当者、経営者。キーワードに施設種別がない場合のデフォルト文脈は工場・倉庫）に維持すること：
+
+- `services/outlineGeneratorV2.ts` — メインプロンプト冒頭の【掲載メディアの文脈（絶対厳守）】ブロック、クリック率向上テクニックの「良い例」、まとめH2の `writingNote`
+- `services/writingAgentV3.ts` — `audience`（2箇所）、まとめセクションのOK例
+- `services/articleRevisionService.ts` — `audience`・読者定義
+
+apaman / zeenb からコードを移植・同期する際は、上記のプロンプト文言を上書きしないよう注意（機能コードのみ同期し、メディア文脈は各プロジェクト固有）。
 
 ### 記事末尾のお問い合わせフォーム
 
@@ -251,6 +297,14 @@ VITE_SERVICE_NAME / VITE_COMPANY_NAME  # 自社ブランド情報
 ### 画像生成エージェントでの除外
 
 画像生成エージェント（`ai-article-imager-for-wordpress`）は「お問い合わせ」セクション（H2）に対して画像を生成しない。
+
+### デフォルト画像のファイル名（日本語名は機能上必須）
+
+`ai-article-imager-for-wordpress/public/default-images/` の日本語ファイル名（`とは・概要.jpg` 等）は、`utils/filenameBasedMatcher.ts` が**ファイル名に含まれる日本語キーワード**（とは/概要/メリット/デメリット/リスク等）で記事見出しとマッチングするために使用している。**英数字へのリネームはマッチング機能を壊すため禁止。**
+
+- 参照される正規ファイルは `default-images/manifest.json` の `files` 配列が唯一の正（現在6件）。画像を追加・変更したら manifest.json も必ず更新する
+- **文字化けファイルをコミットしないこと。** 過去にWindows機から文字コード破損したファイル名（`縺ｨ縺ｯ繝ｻ讎りｦ・jpg` 等）の重複5件が誤コミットされ、同期のたびに「削除扱い＋未追跡ファイル」として全メンバーの作業ツリーを汚していた（2026年8月に削除済み）
+- Windows機で日本語ファイル名が文字化けする場合は、ZIPダウンロードではなく `git clone` で取得する。文字化けファイルを `git add` して解消しようとしないこと（リポジトリに固定化され全員に伝播する）
 
 ## Google Drive ADC認証
 

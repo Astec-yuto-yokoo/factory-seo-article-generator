@@ -2,7 +2,8 @@
 // SEO構成ワークフローに基づいた新しい構成案生成
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import type { 
+import Anthropic from "@anthropic-ai/sdk";
+import type {
   SeoOutlineV2, 
   CompetitorResearchResult, 
   ArticleAnalysis,
@@ -23,6 +24,80 @@ if (!apiKey) {
     throw new Error("GEMINI_API_KEY not set.");
 }
 const genAI = new GoogleGenerativeAI(apiKey);
+
+// 構成案生成はClaude Sonnet 4.6を使用（競合分析・チェックはGeminiのまま）
+const ANTHROPIC_API_KEY =
+  import.meta.env.VITE_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
+const anthropic = ANTHROPIC_API_KEY
+  ? new Anthropic({
+      apiKey: ANTHROPIC_API_KEY,
+      dangerouslyAllowBrowser: true,
+      timeout: 300000, // 5分。ストリーム停止時のハング防止（実測で構成生成に100秒超かかるため180秒では不足）
+      maxRetries: 2,
+    })
+  : null;
+
+// 構成生成ストリームのタイムアウト（ms）。
+// SSEは開通時にHTTP 200を返すため、完了イベントが来ずにストール
+// すると finalMessage() が永久に未解決となる。明示的にabort＆rejectする。
+const OUTLINE_STREAM_TIMEOUT_MS = 300000;
+// 構成案モデルは環境変数で切替可能（未指定時はSonnet 4.6）
+const OUTLINE_MODEL =
+  import.meta.env.VITE_CLAUDE_OUTLINE_MODEL || "claude-sonnet-4-6";
+
+// 構成案JSONをClaudeで生成するヘルパー。
+// Geminiの responseMimeType 相当（JSON強制）は、systemでのJSON専用指示＋
+// 呼び出し側の```フェンス除去/JSON.parse で担保する。ストリーミングで受信。
+async function generateOutlineJsonWithClaude(
+  prompt: string,
+  maxTokens: number
+): Promise<string> {
+  if (!anthropic) {
+    throw new Error(
+      "Claude APIキー(ANTHROPIC_API_KEY / VITE_ANTHROPIC_API_KEY)が未設定です。構成案生成を実行できません。"
+    );
+  }
+  const stream = anthropic.messages.stream({
+    model: OUTLINE_MODEL,
+    max_tokens: maxTokens,
+    system:
+      "You are a JSON generator. Output ONLY a single valid JSON object. Do not use markdown code fences (```), and do not add any explanation before or after the JSON.",
+    messages: [{ role: "user", content: prompt }],
+  } as any);
+
+  // ストリームがストールした場合に永久待機しないよう、タイムアウトで abort＆reject する
+  let timeoutId: any = null;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      try {
+        stream.abort();
+      } catch (abortErr) {
+        console.warn("ストリームabort時の警告:", abortErr);
+      }
+      reject(
+        new Error(
+          `Claude構成生成がタイムアウトしました（${OUTLINE_STREAM_TIMEOUT_MS / 1000}秒）。再度お試しください。`
+        )
+      );
+    }, OUTLINE_STREAM_TIMEOUT_MS);
+  });
+
+  let msg: any;
+  try {
+    msg = await Promise.race([stream.finalMessage(), timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+  let text = "";
+  if (msg && msg.content) {
+    for (const block of msg.content) {
+      if (block && block.type === "text") text += block.text;
+    }
+  }
+  return text;
+}
 
 /**
  * キーワードをスマート分割
@@ -469,6 +544,14 @@ export async function generateOutlineV2(
 現在は${currentYear}年${currentMonth}月です。必ず最新の${currentYear}年の情報を基に構成を作成してください。
 以下の要件に従って、「${keyword}」の記事構成案を作成してください。
 
+【掲載メディアの文脈（絶対厳守）】
+- 掲載先: 工場・倉庫・畜舎・学校など大型施設の外壁塗装・屋根塗装・改修の専門メディア（アステックペイント運営）
+- ターゲット読者: 工場・倉庫・畜舎・学校など大型施設のオーナー、施設管理・総務担当者、経営者
+- タイトル・見出し・執筆メモは必ず「工場・倉庫・畜舎・学校など大型施設」の文脈で作成すること
+- キーワードに施設種別が含まれる場合（例:「畜舎 塗装」「学校 外壁塗装」）は、その施設の文脈に合わせて構成すること
+- キーワードに施設種別が含まれない場合（例:「遮熱塗料」のみ）は、主力領域である工場・倉庫の文脈で構成すること
+- 禁止: 戸建て住宅・アパート・マンション・オフィスビル向けの表現（「マンションオーナー」「大規模修繕」「修繕積立金」「入居者」「管理組合」等）をタイトル・見出し・執筆メモに使わない
+
 【⚠️ 最重要：絶対禁止事項 ⚠️】
 制約条件:
   H2への番号付け禁止:
@@ -662,40 +745,40 @@ ${referenceMaterialContext}
     クリック率向上テクニック（以下6つのうち、キーワードの性質に合うものを2-3つ組み合わせてタイトルを作成すること）:
       テクニック1_読者像の明示:
         説明: "具体的な読者像を示し『自分向けの記事だ』と認識させる"
-        使い方: "「初心者向け」「オーナー必見」「管理会社が知るべき」等の属性ワードをタイトルに含める"
-        良い例: ["初心者でも失敗しない外壁塗装の選び方", "マンションオーナー必見！修繕費を抑える方法"]
+        使い方: "「初心者向け」「工場オーナー必見」「施設管理者が知るべき」等の属性ワードをタイトルに含める"
+        良い例: ["初めてでも失敗しない工場の外壁塗装の選び方", "工場オーナー必見！屋根の遮熱塗装で電気代を抑える方法"]
         適用場面: "ターゲット読者が明確なキーワード（初心者向け、法人向け等）"
       テクニック2_数字で具体性:
         説明: "数字を入れることで情報の具体性と視認性を高める"
         使い方: "「○選」「○つのポイント」「○%」「○分でわかる」等の数字表現を活用"
-        良い例: ["外壁塗装の費用相場と5つの節約ポイント", "90%が見落とす大規模修繕の注意点"]
+        良い例: ["工場の外壁塗装の費用相場と5つの節約ポイント", "90%が見落とす工場屋根の改修の注意点"]
         適用場面: "比較・選び方・ポイント系のキーワード"
       テクニック3_簡単さ・安心感:
         説明: "記事を読めば簡単に理解・実践できると伝え、読者のハードルを下げる"
         使い方: "「わかりやすく解説」「図解あり」「初めてでも安心」等の安心ワードを活用"
-        良い例: ["大規模修繕の流れをわかりやすく解説", "【図解あり】屋上防水工事の種類と選び方"]
+        良い例: ["工場の屋根塗装の流れをわかりやすく解説", "【図解あり】折板屋根の塗装方法と塗料の選び方"]
         適用場面: "専門的・技術的なキーワード"
       テクニック4_ネガティブ感情への訴求:
         説明: "失敗・後悔を避けたい心理に訴え、読者を強く惹きつける"
         使い方: "「失敗しない」「知らないと損する」「よくある落とし穴」等の損失回避ワードを活用"
-        良い例: ["知らないと損する外壁塗装の見積りチェックポイント", "大規模修繕で失敗しないための業者選び"]
+        良い例: ["知らないと損する工場塗装の見積りチェックポイント", "倉庫の屋根改修で失敗しないための業者選び"]
         適用場面: "選び方・注意点・トラブル系のキーワード"
         注意: "記事内容と乖離しない範囲で使用。過度な煽りは禁止"
       テクニック5_得られる情報の明示:
         説明: "記事を読むと何が得られるかを具体的に伝える"
         使い方: "「費用相場がわかる」「手順を紹介」「チェックリスト付き」等の具体的ベネフィットを明示"
-        良い例: ["修繕積立金の相場と適正額がわかる完全ガイド", "外壁劣化の見分け方と対処法を徹底解説"]
+        良い例: ["工場の遮熱塗装の効果と費用がわかる完全ガイド", "スレート屋根の劣化の見分け方と対処法を徹底解説"]
         適用場面: "情報収集・調査系のキーワード"
       テクニック6_疑問の代弁:
         説明: "読者が抱く疑問をそのままタイトルに使い『答えが気になる』心理を引き出す"
         使い方: "「〜とは？」「なぜ〜？」「どちらがいい？」等の疑問形を活用"
-        良い例: ["大規模修繕はなぜ必要？時期・費用・進め方を解説", "外壁塗装と外壁カバー工法はどちらがいい？"]
+        良い例: ["工場の屋根塗装はなぜ必要？時期・費用・進め方を解説", "遮熱塗料と断熱塗料はどちらがいい？"]
         適用場面: "「とは」「違い」「比較」「なぜ」系のキーワード"
 
       組み合わせ例:
-        - "テクニック2+4: 「90%が見落とす大規模修繕の5つの落とし穴」"
-        - "テクニック1+3: 「初めてのオーナー向け｜外壁塗装の流れをわかりやすく解説」"
-        - "テクニック5+6: 「修繕積立金は足りている？適正額の計算方法と見直しポイント」"
+        - "テクニック2+4: 「90%が見落とす工場屋根の改修の5つの落とし穴」"
+        - "テクニック1+3: 「初めての工場オーナー向け｜外壁塗装の流れをわかりやすく解説」"
+        - "テクニック5+6: 「工場の遮熱塗装は効果ある？電気代削減の仕組みと費用相場」"
     
   メタディスクリプション:
     文字数:
@@ -750,7 +833,7 @@ ${referenceMaterialContext}
     まとめ:
       フォーマット: "まとめ：${keyword}を含むサブタイトル"
       H3数: 0
-      writingNote: "記事要点を3-5点で総括し、最後にアステックペイントのアパマン修繕サービスへの問い合わせを自然に案内する（記事テーマの延長線上で）"
+      writingNote: "記事要点を3-5点で総括し、最後にアステックペイントの工場・倉庫・畜舎・学校など大型施設向け塗装・改修サービスへの問い合わせを自然に案内する（記事テーマの延長線上で）"
       
   数字付き見出し:
     条件: "「○選」「○つのポイント」など内容として数を示す場合のみ"
@@ -804,17 +887,7 @@ ${referenceMaterialContext}
 }`;
 
   try {
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-pro",
-      generationConfig: {
-        temperature: 0.5, // バランス重視（創造性と正確性）
-        maxOutputTokens: 16000, // トークン数を増やして詳細な構成を生成可能に
-        responseMimeType: "application/json"
-      }
-    });
-
-    const result = await model.generateContent(prompt);
-    let responseText = result.response.text();
+    let responseText = await generateOutlineJsonWithClaude(prompt, 16000);
     
     // JSONの前後の不要な文字を削除
     responseText = responseText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '');
@@ -1082,17 +1155,7 @@ ${userPrompt}
 }`;
 
   try {
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-pro",
-      generationConfig: {
-        temperature: 0.4,
-        maxOutputTokens: 8000,
-        responseMimeType: "application/json"
-      }
-    });
-
-    const result = await model.generateContent(prompt);
-    let responseText = result.response.text();
+    let responseText = await generateOutlineJsonWithClaude(prompt, 8000);
     responseText = responseText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
 
     const revised = JSON.parse(responseText) as { title: string; outline: OutlineSectionV2[] };
@@ -1171,17 +1234,7 @@ ${outline.outline.map((s, i) => `H2-${i + 1}: ${s.heading}`).join('\n')}
 }`;
 
   try {
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-pro",
-      generationConfig: {
-        temperature: 0.4,
-        maxOutputTokens: 4000,
-        responseMimeType: "application/json"
-      }
-    });
-
-    const result = await model.generateContent(prompt);
-    let responseText = result.response.text();
+    let responseText = await generateOutlineJsonWithClaude(prompt, 4000);
     responseText = responseText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
 
     const revised = JSON.parse(responseText) as OutlineSectionV2;
