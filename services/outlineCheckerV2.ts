@@ -2,6 +2,7 @@
 // 生成された構成案の品質チェックと自動修正
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { callGeminiWithRetry } from "./geminiRetry";
 // latestAIModelsは汎用化のため削除
 import type { 
   SeoOutlineV2, 
@@ -603,7 +604,10 @@ ${h3Shortage ? `
     });
 
     const result = await withTimeout(
-      model.generateContent(fixPrompt),
+      callGeminiWithRetry(
+        () => model.generateContent(fixPrompt),
+        "構成案の修正生成"
+      ),
       FIX_GENERATION_TIMEOUT_MS,
       "構成案の修正生成"
     );

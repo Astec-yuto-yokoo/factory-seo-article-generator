@@ -3,6 +3,7 @@
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { curriculumDataService } from './curriculumDataService';
+import { callGeminiWithRetry } from './geminiRetry';
 // latestAIModelsは汎用化のため削除
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
@@ -215,7 +216,10 @@ ${request.keyword}
 }
 `;
 
-    const result = await model.generateContent(prompt);
+    const result = await callGeminiWithRetry(
+      () => model.generateContent(prompt),
+      "執筆チェック"
+    );
     const response = result.response.text();
     
     try {
@@ -271,7 +275,10 @@ ${competitorArticles.map((a, i) => `競合${i + 1}: ${a.slice(0, 1000)}`).join('
 `;
 
   console.log('🔄 競合分析中...');
-  const result = await model.generateContent(prompt);
+  const result = await callGeminiWithRetry(
+    () => model.generateContent(prompt),
+    "執筆チェック"
+  );
   const text = result.response.text();
   
   // テキストから強み・弱み・機会を抽出（簡易パース）
@@ -310,7 +317,10 @@ ${context.slice(-500)}
 簡潔に、実行可能な形で。
 `;
 
-  const result = await model.generateContent(prompt);
+  const result = await callGeminiWithRetry(
+    () => model.generateContent(prompt),
+    "執筆チェック"
+  );
   return result.response.text();
 }
 
@@ -448,7 +458,10 @@ ${testArticle.slice(0, test.articleLength)}
 }`;
 
       const startTime = Date.now();
-      const result = await model.generateContent(prompt);
+      const result = await callGeminiWithRetry(
+        () => model.generateContent(prompt),
+        "執筆チェック"
+      );
       const response = result.response.text();
       const elapsed = Date.now() - startTime;
 
