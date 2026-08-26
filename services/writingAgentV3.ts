@@ -1041,24 +1041,51 @@ ${
     }, 10000);
 
     try {
-      // 大きめのmax_tokensのためストリーミングで受信（HTTPタイムアウト回避）
-      const stream = anthropic.messages.stream({
-        model: CLAUDE_WRITING_MODEL,
-        max_tokens: CLAUDE_WRITING_MAX_TOKENS,
-        messages: [{ role: "user", content: prompt }],
-      } as any);
-      const claudeMessage = await stream.finalMessage();
-      clearInterval(progressInterval);
-
-      // テキストブロックのみ連結
+      // 自己訂正ハルシネーション検知＋自動リトライ（最大3回）
+      // 「すいません、途中で途切れました。以下に正しい文章を生成します」等の
+      // メタ発話が本文に混入したまま公開されるのを防ぐ。
+      const maxHallucinationRetries = 3;
       var text = "";
-      if (claudeMessage && claudeMessage.content) {
-        for (const block of claudeMessage.content) {
-          if (block && block.type === "text") {
-            text += block.text;
+
+      for (let attempt = 1; attempt <= maxHallucinationRetries; attempt++) {
+        // 大きめのmax_tokensのためストリーミングで受信（HTTPタイムアウト回避）
+        const stream = anthropic.messages.stream({
+          model: CLAUDE_WRITING_MODEL,
+          max_tokens: CLAUDE_WRITING_MAX_TOKENS,
+          messages: [{ role: "user", content: prompt }],
+        } as any);
+        const claudeMessage = await stream.finalMessage();
+
+        // テキストブロックのみ連結
+        let candidateText = "";
+        if (claudeMessage && claudeMessage.content) {
+          for (const block of claudeMessage.content) {
+            if (block && block.type === "text") {
+              candidateText += block.text;
+            }
           }
         }
+
+        const artifact = detectHallucinationArtifact(candidateText);
+        if (!artifact) {
+          text = candidateText;
+          break;
+        }
+
+        console.warn(
+          `⚠️ 自己訂正ハルシネーションを検出 (試行${attempt}/${maxHallucinationRetries}): "${artifact.slice(0, 60)}"`
+        );
+
+        if (attempt === maxHallucinationRetries) {
+          clearInterval(progressInterval);
+          throw new Error(
+            `生成結果にハルシネーションが混入し、${maxHallucinationRetries}回の再生成でも解消しませんでした。検出文言: "${artifact.slice(0, 80)}"`
+          );
+        }
+        console.warn(`   再生成します...`);
       }
+
+      clearInterval(progressInterval);
 
       // 出典テキストをGoogle検索してURLリンクを後付け挿入
       text = await searchAndInsertCitationLinks(text);
@@ -1337,6 +1364,37 @@ function formatLeadQuotes(text: string): string {
  * - <ul> の二重ネスト除去
  * - 各 <li> を <!-- wp:list-item --> で囲む（WordPress 6.x必須）
  */
+// ===== 自己訂正ハルシネーション検知 =====
+
+/**
+ * モデルの自己訂正・謝罪ハルシネーション検知
+ * 生成途中でトークン破綻を起こし、「すいません、文章の途中で途切れてしまいました。
+ * 以下に正しい文章を生成します」等のメタ発話を本文に混入させるケースを検出する。
+ * 検出時は呼び出し側でリトライして再生成する。
+ *
+ * 検出パターンは日本語の文面ベースのため、執筆モデルがGemini/Claudeのいずれでも有効。
+ *
+ * @returns 検出された場合はマッチ文字列、正常なら null
+ */
+function detectHallucinationArtifact(text: string): string | null {
+  if (!text) return null;
+
+  const patterns: RegExp[] = [
+    /(?:すい?ません|申し訳(?:ございません|ありません|ない)|失礼(?:しました|いたしました))[、。\s]{0,5}[^。<>]{0,40}(?:途切れ|途中で|やり直|リセット|先ほど|最初から|生成し直|書き直|もう一度|再度)/,
+    /(?:以下に|以下の|改めて|再度|もう一度)[^。<>]{0,30}(?:正しい|正確な|きちんとした|適切な)(?:文章|記事|内容|もの|形)[^。<>]{0,20}(?:生成|出力|提示|お届け|書き直|作成)/,
+    /もう一度[^。<>]{0,15}(?:最初から|一から)?[^。<>]{0,10}(?:生成|執筆|書き|作成|出力)/,
+    /文章の途中で(?:途切れ|切れ|止まっ)/,
+    /一度(?:リセット|最初から|やり直)/,
+    /先ほどの(?:文章|出力|内容)は[^。<>]{0,20}(?:誤|間違|不適切|途中)/,
+  ];
+
+  for (const re of patterns) {
+    const m = text.match(re);
+    if (m) return m[0];
+  }
+  return null;
+}
+
 // ===== 自社資料の出典記載を削除する関数 =====
 
 /**
