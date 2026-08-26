@@ -122,6 +122,7 @@ interface ArticleWriterProps {
     htmlContent: string;
     plainText: string;
   }) => void;
+  sectionReferenceMaterials?: Record<number, string[]>; // H2別に選択された参考資料名
   isAutoMode?: boolean; // フル自動モードかどうか
   onAutoComplete?: () => void; // フル自動モード完了時のコールバック
   onAutoRevisionStart?: () => void; // 自動修正開始時のコールバック
@@ -136,6 +137,7 @@ interface ArticleWriterProps {
 }
 
 const ArticleWriter: React.FC<ArticleWriterProps> = ({
+  sectionReferenceMaterials,
   outline,
   keyword,
   onClose,
@@ -404,6 +406,7 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
           useGrounding: true, // Grounding機能有効（最新情報を検索しながら執筆）
           referenceMaterialContext: referenceMaterialContext,
           targetCharCount: targetChars,
+          sectionReferenceMaterials: sectionReferenceMaterials,
         });
 
         // 一時的に保存（チェック後にクリーンアップするため）

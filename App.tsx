@@ -34,7 +34,8 @@ import { LogoIcon, SparklesIcon } from "./components/icons";
 import TextCheckPage from "./components/TextCheckPage";
 import ReferenceMaterialManager from "./components/ReferenceMaterialManager";
 import ReferenceMaterialSelector from "./components/ReferenceMaterialSelector";
-import { buildPromptContext, analyzeForArticle } from "./services/referenceMaterialService";
+import { buildPromptContext, analyzeForArticle, listMaterials } from "./services/referenceMaterialService";
+import type { ReferenceMaterial } from "./services/referenceMaterialService";
 import AutoProgressDisplay, {
   type AutoStep,
 } from "./components/AutoProgressDisplay";
@@ -183,6 +184,15 @@ const App: React.FC = () => {
   const handleGenerateFullAutoRef = useRef<any>(null); // handleGenerateFullAutoの参照
 
   // refを常に最新のstateに同期
+  // H2別セレクタ用の参考資料一覧
+  const [availableMaterials, setAvailableMaterials] = useState<ReferenceMaterial[]>([]);
+
+  useEffect(() => {
+    listMaterials()
+      .then(function(data) { setAvailableMaterials(data); })
+      .catch(function(err) { console.warn("参考資料一覧の取得に失敗:", err); });
+  }, []);
+
   useEffect(() => {
     queueIndexRef.current = queueIndex;
   }, [queueIndex]);
@@ -1844,6 +1854,7 @@ const App: React.FC = () => {
                       setWritingMode("v3");
                       setShowArticleWriter(true);
                     }}
+                    availableMaterials={availableMaterials}
                   />
                 )}
 
@@ -1924,6 +1935,28 @@ const App: React.FC = () => {
       {(showArticleWriter || showWriterDirectly) &&
         (outline || outlineV2) && (
           <ArticleWriter
+            sectionReferenceMaterials={
+              outlineV2 ? (function() {
+                const map: Record<number, string[]> = {};
+                for (let i = 0; i < outlineV2.outline.length; i++) {
+                  const sec = outlineV2.outline[i];
+                  if (sec && sec.referenceMaterialIds && sec.referenceMaterialIds.length > 0) {
+                    const names: string[] = [];
+                    for (let j = 0; j < sec.referenceMaterialIds.length; j++) {
+                      const id = sec.referenceMaterialIds[j];
+                      const mat = availableMaterials.find(function(m) { return m.id === id; });
+                      if (mat) {
+                        names.push(mat.title || mat.originalFileName);
+                      }
+                    }
+                    if (names.length > 0) {
+                      map[i] = names;
+                    }
+                  }
+                }
+                return Object.keys(map).length > 0 ? map : undefined;
+              })() : undefined
+            }
             outline={outlineV2 || outline!}
             keyword={keyword}
             writingMode={writingMode}

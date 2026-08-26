@@ -628,6 +628,7 @@ interface WritingRequest {
   outline: string; // マークダウン形式の構成案
   keyword: string; // ターゲットキーワード
   targetAudience?: string; // ターゲット読者
+  sectionReferenceMaterials?: Record<number, string[]>; // H2セクション別に選択された参考資料名
   tone?: "formal" | "casual" | "professional";
   useGrounding?: boolean; // （旧Gemini用）執筆はClaude化したため未使用。互換のため残置
   useCompanyData?: boolean; // 自社データを使うか
@@ -992,6 +993,7 @@ ${curriculumDataText}
 ${internalLinkText}
 ${primaryDataText}
 ${referenceMaterialText}
+${buildSectionRefMaterialText(request.sectionReferenceMaterials)}
 ${productRecommendationText}
 ${isHeatRelatedKeyword(request.keyword) ? HEAT_STEERING_WRITING_INSTRUCTIONS : ''}
 【目標文字数（厳守）】
@@ -1364,6 +1366,36 @@ function formatLeadQuotes(text: string): string {
  * - <ul> の二重ネスト除去
  * - 各 <li> を <!-- wp:list-item --> で囲む（WordPress 6.x必須）
  */
+// ===== H2セクション別 参考資料の活用指示 =====
+
+/**
+ * 構成案のH2ごとに選択された参考資料を、執筆プロンプト用の指示文に変換する。
+ * 何も選択されていなければ空文字を返す（任意機能）。
+ */
+function buildSectionRefMaterialText(sectionMaterials?: Record<number, string[]>): string {
+  if (!sectionMaterials) return "";
+
+  const entries: string[] = [];
+  const keys = Object.keys(sectionMaterials);
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    if (key === undefined) continue;
+    const sectionIndex = parseInt(key, 10);
+    const materialNames = sectionMaterials[sectionIndex];
+    if (!materialNames || materialNames.length === 0) continue;
+    const nameList = materialNames.map(function(name) { return "「" + name + "」"; }).join("、");
+    entries.push("- " + (sectionIndex + 1) + ". " + nameList + " の情報を重点的に活用");
+  }
+
+  if (entries.length === 0) return "";
+
+  return "\n【H2セクション別 参考資料活用指示（重要）】\n" +
+    "以下のH2セクションでは、指定された参考資料の情報を自然な形で本文に盛り込んでください。\n" +
+    "【厳守】自社資料から得た情報には、出典記載（※出典元：自社資料〜 等）を付けないこと。本文に自然に織り込むのみとする。\n\n" +
+    entries.join("\n") + "\n\n" +
+    "※ 指定のないH2セクションでは、参考資料の強制的な反映は不要です（文脈に合えば自然に活用してもよい）。\n";
+}
+
 // ===== 自己訂正ハルシネーション検知 =====
 
 /**
