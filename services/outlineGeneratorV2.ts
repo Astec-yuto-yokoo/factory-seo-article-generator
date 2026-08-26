@@ -18,6 +18,7 @@ import { generateTitleHook, generateFullTitle } from '../utils/titleHookGenerato
 // import { getCompanyInfo, generateCompanyContext } from './companyService';
 // import { curriculumDataService } from './curriculumDataService';
 import { getContextForKeywords, isSupabaseAvailable } from './primaryDataService';
+import { isHeatRelatedKeyword, HEAT_STEERING_OUTLINE_RULES } from './heatSteeringConfig';
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
 if (!apiKey) {
@@ -551,6 +552,7 @@ export async function generateOutlineV2(
 - キーワードに施設種別が含まれる場合（例:「畜舎 塗装」「学校 外壁塗装」）は、その施設の文脈に合わせて構成すること
 - キーワードに施設種別が含まれない場合（例:「遮熱塗料」のみ）は、主力領域である工場・倉庫の文脈で構成すること
 - 禁止: 戸建て住宅・アパート・マンション・オフィスビル向けの表現（「マンションオーナー」「大規模修繕」「修繕積立金」「入居者」「管理組合」等）をタイトル・見出し・執筆メモに使わない
+${isHeatRelatedKeyword(keyword) ? HEAT_STEERING_OUTLINE_RULES : ''}
 
 【⚠️ 最重要：絶対禁止事項 ⚠️】
 制約条件:

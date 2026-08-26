@@ -13,6 +13,8 @@ import { companyDataService } from "./companyDataService";
 import { curriculumDataService } from "./curriculumDataService";
 import { getContextForKeywords, isSupabaseAvailable } from "./primaryDataService";
 import { numberArticleHeadings } from "../utils/headingNumberer";
+import { isHeatRelatedKeyword, HEAT_STEERING_WRITING_INSTRUCTIONS } from "./heatSteeringConfig";
+import { buildProductRecommendationText } from "./productRecommendationConfig";
 // latestAIModelsは汎用化のため削除
 
 const API_KEY =
@@ -924,6 +926,12 @@ ${request.referenceMaterialContext}
       console.log("⏭️ [1.8/4] スキップ: 参考資料なし");
     }
 
+    // 自社製品レコメンドの構築（キーワード・構成にマッチする製品のみ注入。無ければ空文字）
+    const productRecommendationText = buildProductRecommendationText(
+      request.keyword,
+      request.outline
+    );
+
     // 執筆モデル: Claude Opus 4.8（事実確認は構成段階のGeminiグラウンディング＋最終校閲に委譲）
     if (!anthropic) {
       throw new Error(
@@ -951,6 +959,8 @@ ${curriculumDataText}
 ${internalLinkText}
 ${primaryDataText}
 ${referenceMaterialText}
+${productRecommendationText}
+${isHeatRelatedKeyword(request.keyword) ? HEAT_STEERING_WRITING_INSTRUCTIONS : ''}
 【目標文字数（厳守）】
 記事全体で ${request.targetCharCount || 7000} 文字（目安6,000〜8,000文字、上限8,000文字）。8,000文字を超えないこと。
 各セクションは簡潔にまとめ、冗長な表現や繰り返しを避けること。
