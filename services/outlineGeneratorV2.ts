@@ -259,17 +259,25 @@ function calculateAveragesExcludingNoise(
 
   // Step 7: 調整後の数を計算
   // FAQは競合の状況に応じて追加
-  const faqH2Addition = faqDetection.hasFAQ ? 0 : 0; // FAQは競合にある場合は平均に含まれているので追加しない
-  const faqH3Addition = faqDetection.hasFAQ ? 0 : 0; // FAQのH3も同様
+  const faqH2Addition = 0; // FAQは競合にある場合は平均に含まれているので追加しない
+  const faqH3Addition = 0; // FAQのH3も同様
 
-  const adjustedH2Count = averageH2Count + faqH2Addition;
-  const adjustedH3Count = averageH3Count + faqH3Addition;
+  // 自社サービス訴求H2は競合には存在しないため、競合平均に上乗せして枠を確保する。
+  // これを加算しないと、モデルがH2上限に収めようとして訴求章を落としてしまう。
+  // UI（OutlineDisplayV2の「サービス訴求追加後」表示）も +1 H2 / +2 H3 を前提にしている。
+  const serviceH2Addition = 1;
+  const serviceH3Addition = 2;
+
+  const adjustedH2Count = averageH2Count + faqH2Addition + serviceH2Addition;
+  const adjustedH3Count = averageH3Count + faqH3Addition + serviceH3Addition;
 
   console.log(`\n📊 最終調整後の目標値:`);
   console.log(`   基本H2数: ${averageH2Count}個`);
   console.log(`   + FAQ調整: ${faqH2Addition}個`);
+  console.log(`   + 自社サービス訴求枠: ${serviceH2Addition}個`);
   console.log(`   = 調整後H2数: ${adjustedH2Count}個`);
   console.log(`   基本H3数: ${averageH3Count}個`);
+  console.log(`   + 自社サービス訴求のH3: ${serviceH3Addition}個`);
   console.log(`   = 調整後H3数: ${adjustedH3Count}個`)
   console.log('');
   
@@ -793,7 +801,7 @@ ${referenceMaterialContext}
     min: ${minH2Count}
     max: ${Math.floor(adjustedH2Count * 1.1)}
     ideal: ${adjustedH2Count}
-    特殊ルール: "まとめH2は必須、H3は0個"
+    特殊ルール: "まとめH2は必須（H3は0個）。自社サービス訴求H2も必須（H3は2〜3個）。この2つは上記H2数に必ず含めること"
 
   H3総数:
     min: ${minH3Count}（競合平均の90%以上を確保）
@@ -803,13 +811,14 @@ ${referenceMaterialContext}
       - "重要H2: 多めに配分"
       - "標準H2: 適度に配分"
       - "まとめH2: 必ず0個（絶対厳守）"
+      - "自社サービス訴求H2: 必ず2〜3個（絶対厳守）"
     重要: "まとめは例外なくH3を0個にすること。他のH2でH3数を調整する。"
 その他のルール:
   見出しの重複禁止:
     - "同じ意図の見出しを別のH2/H3で繰り返さない"
     - "H2とその配下のH3で意味が重複しないよう注意"
     
-  H2順序: "上位3記事の多数派順序を優先（最後2つは固定）"
+  H2順序: "上位3記事の多数派順序を優先（最後3つ＝FAQ・自社サービス訴求・まとめ は固定）"
 
   キーワード含有:
     方針: "自然に置き換え可能な場合のみH2に含める"
@@ -819,7 +828,16 @@ ${referenceMaterialContext}
     H2: "最大200字"
     H3: "200-300字目安"
   固定順序:
-    最後2つ: ["FAQ（ある場合）", "まとめ"]
+    最後3つ: ["FAQ（競合に多い場合のみ・任意）", "自社サービス訴求（必須）", "まとめ（必須）"]
+    自社サービス訴求:
+      必須: "このH2は例外なく必ず含めること。省略は禁止"
+      位置: "まとめの直前（FAQがある場合はFAQの後）"
+      見出し形式: "「アステックペイントの◯◯」のように、記事テーマと自社の提供価値をつないだ具体的な見出し（サービス名の羅列は禁止）"
+      良い例: ["アステックペイントの工場向け遮熱塗装という選択肢", "アステックペイントが提供する屋根改修のサポート体制"]
+      悪い例: ["自社サービス訴求", "サービス紹介", "お問い合わせ"]
+      H3数: "2〜3個（絶対厳守）"
+      H3の内容: "製品・技術の強み / 提携施工店による施工体制 / 診断・アフターフォロー などから2〜3点"
+      重要: "アステックペイントは塗料メーカーであり直接施工はしない。施工は提携施工店が行うため、執筆メモに「メーカーとして塗料選定と工事提案、提携施工店の紹介を行う」旨を記載すること"
     FAQ:
       位置: "まとめの前（ある場合のみ）"
       見出し形式: "キーワードを含めた具体的な見出し（15-25文字程度）"

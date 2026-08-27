@@ -280,6 +280,42 @@ export function checkOutline(
     }
   });
   
+  // 8.5 自社サービス訴求H2の必須チェック（まとめの直前に必ず1つ）
+  // 生成プロンプトが訴求章を落とすことがあったため、検証で捕捉して自動修正に回す。
+  {
+    const sections = outline.outline;
+    if (sections.length >= 2) {
+      const serviceSection = sections[sections.length - 2];
+      const serviceName = (import.meta as any).env?.VITE_COMPANY_NAME || 'アステックペイント';
+      const isSummary = function (h: string) {
+        return h.indexOf('まとめ') !== -1 || h.indexOf('最後に') !== -1 || h.indexOf('おわりに') !== -1;
+      };
+      // まとめの直前が「自社名を含む」または「サービス訴求」なら訴求章とみなす
+      const looksLikeService =
+        serviceSection.heading.indexOf(serviceName) !== -1 ||
+        serviceSection.heading.indexOf('サービス訴求') !== -1;
+
+      if (!looksLikeService && !isSummary(serviceSection.heading)) {
+        errors.push({
+          field: 'outline',
+          message: `まとめの直前に「自社サービス訴求」H2がありません（現在: 「${serviceSection.heading}」）。まとめの直前に${serviceName}の提供価値を訴求するH2（H3を2〜3個）を追加してください。`,
+          severity: 'error'
+        });
+        suggestions.push(`例: 「${serviceName}の工場向け遮熱塗装という選択肢」（H3: 製品・技術の強み / 提携施工店による施工体制 / 診断・アフターフォロー）`);
+      } else if (looksLikeService) {
+        // 訴求章はあるがH3数が規定外
+        const h3n = serviceSection.subheadings ? serviceSection.subheadings.length : 0;
+        if (h3n < 2 || h3n > 3) {
+          errors.push({
+            field: 'outline',
+            message: `自社サービス訴求H2「${serviceSection.heading}」のH3数が${h3n}個です。2〜3個にしてください。`,
+            severity: 'error'
+          });
+        }
+      }
+    }
+  }
+
   // 9. 記事構成の順序チェック（FAQ → まとめ）
   const outlineLength = outline.outline.length;
   if (outlineLength >= 2) {
