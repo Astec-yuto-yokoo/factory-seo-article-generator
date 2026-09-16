@@ -281,9 +281,27 @@ FAQは競合の30%以上が含む場合のみ生成される仕様（任意）�
 
 ## factory 専用カスタマイズ
 
+### 施設カテゴリ切替（工場・倉庫 / 畜舎 / 店舗 / 施設）
+
+ヘッダー直下の施設カテゴリタブ（`App.tsx` の `facilityCategoryId` state）で、記事の読者・訴求文脈をサイトの業種別LP（https://astec-factory.com/industry/）に合わせて切り替える。
+
+- **定義**: `services/facilityCategoryConfig.ts` の `FACILITY_CATEGORIES`（読者・建物特性・ニーズ優先順・意思決定・響く訴求・禁止・使える事例・サービスページURL・キーワードドメイン）。根拠は `docs/CATEGORY_PERSONAS.md`（Loop「260703_業種別LPヒアリング」「260714_企画書｜業種別LP」＋各業種LPを整理）。ペルソナを変えるときはまず docs を更新し、config に反映する
+- **状態**: 選択中カテゴリはモジュール変数＋`localStorage`（`facilityCategory`）で保持。`setCurrentFacilityCategory()` は App.tsx のタブからのみ呼ぶ。各サービスは引数を増やさず `getCurrentFacilityCategory()` を参照する（姉妹プロジェクトとの関数シグネチャ互換を維持するため）
+- **注入箇所**（削除・簡略化禁止）:
+  - `outlineGeneratorV2.ts` — 【掲載メディアの文脈】は `buildOutlineMediaContext()`、まとめの writingNote は `buildSummaryWritingNote()`、構成案H2修正（`reviseOutlineSection`）・全体修正（`reviseFullOutline`）プロンプトに `buildRevisionCategoryContext()`
+  - `writingAgentV3.ts` — `WRITING_INSTRUCTIONS` 直後に `buildWritingCategoryContext()`（YAML内の `audience` を上書きする最優先ブロック。業種別LPへの内部リンク1箇所を必須化）
+  - `articleRevisionService.ts` — `WRITING_STYLE` の直後2箇所と `reviseArticleH2Section()` に `buildRevisionCategoryContext()`
+  - `sectionBasedArticleWriter.ts`（「執筆開始（Ver.1）」ボタンの既定経路）と `articleWriterService.ts`（V1 standard／`regenerateSection`）— 【ターゲット読者】直後に `buildRevisionCategoryContext()`。V1構成生成（`geminiServiceUpdated` / `outlineOptimizer`）は `KeywordInputForm` のフォームが `handleSubmitV2` のみを使うためUIから到達不能（未対応のまま）
+  - `strategicKeywordService.ts` — `KEYWORD_DOMAIN` 定数は廃止し `keywordDomain()`（`VITE_KEYWORD_DOMAIN` があれば固定上書き）。読者文・施設語もカテゴリから取得
+  - `outlineCheckerV2.ts` — 自社サービス訴求H2の例文を `serviceH2Example` から生成
+  - `heatSteeringConfig.ts` — `getHeatSteeringOutlineRules()` / `getHeatSteeringWritingInstructions()` がカテゴリ別の「暑さの意味づけ」（店舗＝空調電力コスト、畜舎＝家畜の暑熱ストレス、施設＝廊下・体育館の暑さ）を先頭に付ける。旧定数は残置
+  - `productRecommendationConfig.ts` — `getThemeMappings(categoryId)` でカテゴリ別に製品優先順位を上書き。店舗は屋根系テーマの第一推薦を **シャネツテックⅡSi-JY**（トップワンは店舗非採用・Loopヒアリング）、畜舎はリファイン500Si-IR/500MF-IR、施設は折板用トップワンを外し **エピテックフィラーAEⅡ**＋外壁高耐候。「RC造外壁の改修・ひび割れ補修（施設）」テーマを追加。カテゴリ固有の補足は `categoryNote`（複数テーマにマッチしても1回だけ出力）、元の `writingNote` からはトップワン・下塗り不要に言及する文を `stripTopOneSentences()` で除去する。挿入ルールの製品名例は先頭製品から動的生成（店舗・施設でトップワンが例示されないように）
+- **カテゴリ別の絶対ルール**: 店舗は「暑さ」「雨漏り」を主訴にしない（電力コスト＞結露カビ＞美観）。施設は公立・公共工事を対象にせず表記は「施設（私立学校・老健施設（老人ホーム）・病院・宿泊施設）」、決裁者は「決裁者」で統一。畜舎は家畜の生産性を主軸にし工場の生産ライン前提で書かない。全カテゴリで店舗・施設固有の施工実績は未保有のため断定しない（倉庫・工場事例を「他業種事例」と明記して引用）
+- 食品工場LPはタブに含めない（工場・倉庫カテゴリで扱う）
+
 ### プロンプト内のメディア文脈（apaman混入禁止）
 
-本プロジェクトは apaman 版からの移植のため、プロンプト内にアパマン向け文言（「アパマン修繕サービス」「マンションオーナー」「大規模修繕」「修繕積立金」等）が混入するとタイトル・見出し・本文がアパマン向けになる。以下を factory 向け（工場・倉庫・畜舎・学校など大型施設の外壁塗装・屋根塗装・改修／読者＝大型施設のオーナー、施設管理・総務担当者、経営者。キーワードに施設種別がない場合のデフォルト文脈は工場・倉庫）に維持すること：
+本プロジェクトは apaman 版からの移植のため、プロンプト内にアパマン向け文言（「アパマン修繕サービス」「マンションオーナー」「大規模修繕」「修繕積立金」等）が混入するとタイトル・見出し・本文がアパマン向けになる。以下を factory 向けに維持すること（読者・掲載先の具体文言は上記「施設カテゴリ切替」の `facilityCategoryConfig.ts` が注入する。定数内の残存文言は既定カテゴリ＝工場・倉庫向けのフォールバック）：
 
 - `services/outlineGeneratorV2.ts` — メインプロンプト冒頭の【掲載メディアの文脈（絶対厳守）】ブロック、クリック率向上テクニックの「良い例」、まとめH2の `writingNote`
 - `services/writingAgentV3.ts` — `audience`（2箇所）、まとめセクションのOK例

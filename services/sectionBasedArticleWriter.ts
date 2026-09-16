@@ -1,6 +1,7 @@
 // セクション単位での記事生成サービス
 // 各見出しを個別に生成し、文字数を確実にコントロール
 
+import { buildRevisionCategoryContext } from "./facilityCategoryConfig";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { SeoOutline, FrequencyWord, SubheadingWithNote } from '../types';
 import type { WritingRegulation } from './articleWriterService';
@@ -233,6 +234,8 @@ ${keyword}
 【ターゲット読者】
 ${context.targetAudience}
 
+${buildRevisionCategoryContext()}
+
 【文体】
 ${context.tone}
 ${previousContext}
@@ -283,6 +286,8 @@ ${keyword}
 
 【ターゲット読者】
 ${context.targetAudience}
+
+${buildRevisionCategoryContext()}
 
 【文体】
 ${context.tone}
@@ -471,6 +476,8 @@ async function generateIntroduction(
 
 【ターゲット読者】
 ${outline.targetAudience}
+
+${buildRevisionCategoryContext()}
 
 【記事の概要】
 ${outline.introduction || (outline.introductions?.conclusionFirst || outline.introductions?.empathy) || ''}

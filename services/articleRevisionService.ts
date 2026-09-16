@@ -1,4 +1,5 @@
 // 記事修正サービス（Gemini 2.5 Pro使用）
+import { buildRevisionCategoryContext } from "./facilityCategoryConfig";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { Issue } from "./finalProofreadingAgents/types";
 import {
@@ -656,6 +657,7 @@ ${relevantSegments
 
   const prompt = `
 ${WRITING_STYLE}
+${buildRevisionCategoryContext()}
 
 ${companyDataContext}
 
@@ -1334,6 +1336,7 @@ ${originalArticle}
 
   const fullRevisionPrompt = `
 ${WRITING_STYLE}
+${buildRevisionCategoryContext()}
 
 ${companyDataContext}
 
@@ -1701,6 +1704,8 @@ export async function reviseArticleH2Section(
 
 【キーワード】
 ${keyword}
+
+${buildRevisionCategoryContext()}
 
 【修正対象のH2セクション（HTML）】
 ${targetSection}

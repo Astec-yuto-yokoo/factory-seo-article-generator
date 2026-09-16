@@ -1,6 +1,7 @@
 // 記事執筆サービス
 // 構成案から実際の記事本文を生成
 
+import { buildRevisionCategoryContext } from "./facilityCategoryConfig";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { SeoOutline, CompetitorResearchResult, FrequencyWord, SubheadingWithNote } from '../types';
 
@@ -146,6 +147,8 @@ export async function generateArticle(
 
 【ターゲット読者】
 ${outline.targetAudience}
+
+${buildRevisionCategoryContext()}
 
 【記事構成（必ずこの構成に従ってください）】
 ${outline.outline.map((section, index) => {
@@ -737,6 +740,8 @@ ${targetWordCount}文字程度
 
 【ターゲット読者】
 ${context.targetAudience}
+
+${buildRevisionCategoryContext()}
 
 ${frequencyWordInstruction}
 

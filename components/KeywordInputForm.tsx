@@ -26,6 +26,7 @@ interface KeywordInputFormProps {
     autoMode?: boolean;
   }) => void; // 画像生成エージェントをiframeで開く
   initialKeyword?: string; // 他タブ（キーワード選定）から引き継いだ初期キーワード
+  keywordPlaceholder?: string; // 施設カテゴリに応じた入力例
 }
 
 const KeywordInputForm: React.FC<KeywordInputFormProps> = ({
@@ -41,6 +42,7 @@ const KeywordInputForm: React.FC<KeywordInputFormProps> = ({
     "http://localhost:3002",
   onOpenImageAgent,
   initialKeyword,
+  keywordPlaceholder,
 }) => {
   // デバッグ用ログ
   console.log("🔍 KeywordInputForm Debug:");
@@ -182,7 +184,7 @@ const KeywordInputForm: React.FC<KeywordInputFormProps> = ({
             type="text"
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
-            placeholder="例: 「React パフォーマンス最適化」"
+            placeholder={keywordPlaceholder || "例: 「工場 屋根 遮熱塗装 費用」"}
             className="w-full pl-11 pr-4 py-3.5 bg-white border border-gray-200 rounded-xl text-gray-800 placeholder-gray-400 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition duration-200 ease-in-out shadow-sm"
             disabled={isLoading}
           />

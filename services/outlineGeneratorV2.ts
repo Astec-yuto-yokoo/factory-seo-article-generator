@@ -18,7 +18,8 @@ import { generateTitleHook, generateFullTitle } from '../utils/titleHookGenerato
 // import { getCompanyInfo, generateCompanyContext } from './companyService';
 // import { curriculumDataService } from './curriculumDataService';
 import { getContextForKeywords, isSupabaseAvailable } from './primaryDataService';
-import { isHeatRelatedKeyword, HEAT_STEERING_OUTLINE_RULES } from './heatSteeringConfig';
+import { isHeatRelatedKeyword, getHeatSteeringOutlineRules } from './heatSteeringConfig';
+import { buildOutlineMediaContext, buildSummaryWritingNote, buildRevisionCategoryContext } from './facilityCategoryConfig';
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
 if (!apiKey) {
@@ -553,14 +554,8 @@ export async function generateOutlineV2(
 現在は${currentYear}年${currentMonth}月です。必ず最新の${currentYear}年の情報を基に構成を作成してください。
 以下の要件に従って、「${keyword}」の記事構成案を作成してください。
 
-【掲載メディアの文脈（絶対厳守）】
-- 掲載先: 工場・倉庫・畜舎・学校など大型施設の外壁塗装・屋根塗装・改修の専門メディア（アステックペイント運営）
-- ターゲット読者: 工場・倉庫・畜舎・学校など大型施設のオーナー、施設管理・総務担当者、経営者
-- タイトル・見出し・執筆メモは必ず「工場・倉庫・畜舎・学校など大型施設」の文脈で作成すること
-- キーワードに施設種別が含まれる場合（例:「畜舎 塗装」「学校 外壁塗装」）は、その施設の文脈に合わせて構成すること
-- キーワードに施設種別が含まれない場合（例:「遮熱塗料」のみ）は、主力領域である工場・倉庫の文脈で構成すること
-- 禁止: 戸建て住宅・アパート・マンション・オフィスビル向けの表現（「マンションオーナー」「大規模修繕」「修繕積立金」「入居者」「管理組合」等）をタイトル・見出し・執筆メモに使わない
-${isHeatRelatedKeyword(keyword) ? HEAT_STEERING_OUTLINE_RULES : ''}
+${buildOutlineMediaContext()}
+${isHeatRelatedKeyword(keyword) ? getHeatSteeringOutlineRules() : ''}
 
 【⚠️ 最重要：絶対禁止事項 ⚠️】
 制約条件:
@@ -853,7 +848,7 @@ ${referenceMaterialContext}
     まとめ:
       フォーマット: "まとめ：${keyword}を含むサブタイトル"
       H3数: 0
-      writingNote: "記事要点を3-5点で総括し、最後にアステックペイントの工場・倉庫・畜舎・学校など大型施設向け塗装・改修サービスへの問い合わせを自然に案内する（記事テーマの延長線上で）"
+      writingNote: "${buildSummaryWritingNote()}"
       
   数字付き見出し:
     条件: "「○選」「○つのポイント」など内容として数を示す場合のみ"
@@ -1133,6 +1128,8 @@ export async function reviseFullOutline(
 【キーワード】
 ${keyword}
 
+${buildRevisionCategoryContext()}
+
 【タイトル】
 ${outline.title}
 
@@ -1224,6 +1221,8 @@ export async function reviseOutlineSection(
 
 【キーワード】
 ${keyword}
+
+${buildRevisionCategoryContext()}
 
 【修正対象のH2セクション】
 見出し: ${section.heading}

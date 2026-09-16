@@ -5,6 +5,8 @@
  * 構成生成・執筆の両段階で自動注入する。
  */
 
+import { getCurrentFacilityCategory } from './facilityCategoryConfig';
+
 // 暑さ関連キーワードの判定パターン
 const HEAT_KEYWORDS = [
   '暑さ対策',
@@ -30,6 +32,16 @@ const HEAT_KEYWORDS = [
   '大型扇風機',
   '工場 冷房',
   '倉庫 冷房',
+  // 畜舎・店舗・施設カテゴリ向け
+  '暑熱ストレス',
+  '牛舎 暑',
+  '豚舎 暑',
+  '鶏舎 暑',
+  '電気代',
+  '光熱費',
+  '空調費',
+  '体育館 暑',
+  '廊下 暑',
 ];
 
 /**
@@ -115,3 +127,28 @@ URL: ${HEAT_REFERENCE_URL}
 挿入位置：遮熱塗装に言及するセクション内の自然な文脈で挿入すること。
 形式: <a href="${HEAT_REFERENCE_URL}" target="_blank" rel="noopener">アンカーテキスト</a>
 `;
+
+/**
+ * カテゴリ別の暑さ対策ステアリング（構成生成用）
+ * 施設カテゴリの「暑さの意味づけ」を先頭に付けて返す
+ */
+export function getHeatSteeringOutlineRules(): string {
+  const cat = getCurrentFacilityCategory();
+  return `
+【暑さ対策ステアリング：${cat.label}カテゴリの前提（最優先）】
+${cat.heatSteeringNote}
+以下のルール中の「工場・倉庫」は「${cat.shortLabel}」に読み替えて適用すること。
+${HEAT_STEERING_OUTLINE_RULES}`;
+}
+
+/**
+ * カテゴリ別の暑さ対策ステアリング（執筆用）
+ */
+export function getHeatSteeringWritingInstructions(): string {
+  const cat = getCurrentFacilityCategory();
+  return `
+【暑さ対策ステアリング：${cat.label}カテゴリの前提（最優先）】
+${cat.heatSteeringNote}
+以下の指示中の「工場・倉庫」は「${cat.shortLabel}」に読み替えて適用すること。
+${HEAT_STEERING_WRITING_INSTRUCTIONS}`;
+}

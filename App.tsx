@@ -44,6 +44,13 @@ import FactCheckPage from "./components/FactCheckPage";
 import ArticleRevisionForm from "./components/ArticleRevisionForm";
 import { useImageAgent, type ArticleDataForImageAgent } from "./hooks/useImageAgent";
 import { ImageGeneratorIframe } from "./components/ImageGeneratorIframe";
+import {
+  FACILITY_CATEGORIES,
+  FACILITY_CATEGORY_ORDER,
+  getCurrentFacilityCategoryId,
+  setCurrentFacilityCategory,
+  type FacilityCategoryId,
+} from "./services/facilityCategoryConfig";
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<
@@ -65,6 +72,16 @@ const App: React.FC = () => {
 
   // デフォルト画面の上位タブ（原稿作成 / キーワード選定）
   const [mainMode, setMainMode] = useState<"article" | "keyword">("article");
+
+  // 施設カテゴリ（工場・倉庫 / 畜舎 / 店舗 / 施設）— 全プロンプトの読者・訴求文脈を切り替える
+  const [facilityCategoryId, setFacilityCategoryId] = useState<FacilityCategoryId>(
+    getCurrentFacilityCategoryId()
+  );
+  const facilityCategory = FACILITY_CATEGORIES[facilityCategoryId];
+  const handleChangeFacilityCategory = (id: FacilityCategoryId) => {
+    setCurrentFacilityCategory(id);
+    setFacilityCategoryId(id);
+  };
   // キーワード選定タブから原稿作成へ引き継ぐキーワード
   const [articleSeedKeyword, setArticleSeedKeyword] = useState<string>("");
 
@@ -1492,6 +1509,35 @@ const App: React.FC = () => {
             競合サイトを分析し、検索上位を狙える記事構成案をAIが作成します
           </p>
         </div>
+        {/* 施設カテゴリタブ（業種別LPに対応） */}
+        <div className="mb-6">
+          <div className="flex gap-2 justify-center flex-wrap" role="tablist" aria-label="施設カテゴリ">
+            {FACILITY_CATEGORY_ORDER.map((id) => {
+              const cat = FACILITY_CATEGORIES[id];
+              const isActive = id === facilityCategoryId;
+              return (
+                <button
+                  key={id}
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => handleChangeFacilityCategory(id)}
+                  disabled={isLoading || isProcessingQueue}
+                  className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                    isActive
+                      ? cat.activeColorClass
+                      : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-3 text-center text-xs text-gray-500">
+            <span className="font-semibold text-gray-700">{facilityCategory.shortLabel}</span>
+            向けエージェント｜想定読者: {facilityCategory.audience}
+          </p>
+        </div>
         {/* ツールボタン */}
         <div className="flex gap-2 sm:gap-3 justify-center flex-wrap">
           <button
@@ -1548,7 +1594,7 @@ const App: React.FC = () => {
                       handleGenerateStrategicKeywords();
                     }
                   }}
-                  placeholder="例: 工場 遮熱塗装（記事にしたい大まかな領域を入力）"
+                  placeholder={facilityCategory.themePlaceholder}
                   className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 outline-none"
                 />
                 <p className="mt-1 text-xs text-gray-500">
@@ -1585,6 +1631,7 @@ const App: React.FC = () => {
             apiUsageWarning={apiUsageWarning}
             onOpenImageAgent={openImageAgentInIframe}
             initialKeyword={articleSeedKeyword}
+            keywordPlaceholder={facilityCategory.keywordPlaceholder}
           />
 
           <div className="mt-8">

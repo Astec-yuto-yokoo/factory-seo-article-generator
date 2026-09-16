@@ -1,3 +1,4 @@
+import { getKeywordDomain, getCurrentFacilityCategory } from "./facilityCategoryConfig";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import type {
   CompetitorResearchResult,
@@ -19,8 +20,13 @@ const genAI = new GoogleGenerativeAI(apiKey || "");
 
 // このツールが対象とする記事ドメイン（既定: 工場・倉庫の塗装・改修）。
 // テーマに建物種別が無い場合、この領域に自動で絞り込むために使う。
-const KEYWORD_DOMAIN =
-  import.meta.env.VITE_KEYWORD_DOMAIN || "工場・倉庫・畜舎・学校など大型施設の外壁塗装・屋根塗装・改修";
+// 施設カテゴリ（App.tsx の上位タブ）に応じて切り替わる。VITE_KEYWORD_DOMAIN があれば固定上書き。
+function keywordDomain(): string {
+  return import.meta.env.VITE_KEYWORD_DOMAIN || getKeywordDomain();
+}
+function facilityTerms(): string {
+  return getCurrentFacilityCategory().defaultFacilityTerms.map((t) => `「${t}」`).join("");
+}
 
 /**
  * Geminiのレスポンス文字列からJSON部分を抽出してクリーニングする。
@@ -179,10 +185,10 @@ export async function generateStrategicKeywords(
 「${keyword}」
 
 # 対象ドメイン（絶対厳守）
-- このメディアの対象領域は「${KEYWORD_DOMAIN}」です。
-- 入力テーマに「工場」「倉庫」等の建物種別が**含まれている場合はそれを優先**して絞り込む。
-- 建物種別が**含まれていない場合**（例:「遮熱塗料」のみ）は、自動的に「${KEYWORD_DOMAIN}」の文脈に絞って展開する（例:「遮熱塗料」→「工場の遮熱塗料」）。畜舎・学校など対象施設のバリエーションも含めてよいが、戸建て住宅・アパート・マンション・オフィスビルなど対象外の領域へ広げない。
-- 生成する全キーワードは、この対象ドメインに該当していなければならない。建物種別を明示していないテーマでも、キーワード側には適宜「工場」「倉庫」を補って具体化してよい。
+- このメディアの対象領域は「${keywordDomain()}」です。読者は「${getCurrentFacilityCategory().audience}」です。
+- 入力テーマに${facilityTerms()}等の建物種別が**含まれている場合はそれを優先**して絞り込む。
+- 建物種別が**含まれていない場合**（例:「遮熱塗料」のみ）は、自動的に「${keywordDomain()}」の文脈に絞って展開する（例:「遮熱塗料」→「${getCurrentFacilityCategory().defaultFacilityTerms[0]}の遮熱塗料」）。同カテゴリ内の施設バリエーション（${getCurrentFacilityCategory().facilityWords.join("・")}）は含めてよいが、戸建て住宅・アパート・マンション・オフィスビルなど対象外の領域へ広げない。
+- 生成する全キーワードは、この対象ドメインに該当していなければならない。建物種別を明示していないテーマでも、キーワード側には適宜${facilityTerms()}を補って具体化してよい。
 
 # 最重要: テーマの解釈と展開ルール（絶対厳守）
 - 入力テーマは「抽象的な軸」です。あなたの役割は、この軸の**語義の範囲内で**、具体的で検索されうるロングテールキーワードへ展開することです。
@@ -415,10 +421,10 @@ const TREND_SCHEMA_HINT = `
   "keywords": [
     {
       "newsSummary": "拾った時事ニュース・話題（いつ頃の何の話題か・1〜2文）",
-      "keyword": "そのニュースから狙う検索キーワード（工場・倉庫・畜舎・学校など大型施設の塗装・改修文脈の具体語）",
+      "keyword": "そのニュースから狙う検索キーワード（対象ドメインの塗装・改修文脈の具体語）",
       "intent": "インフォメーショナル | コマーシャル | トランザクショナル | ナビゲーショナル のいずれか",
       "priority": "高 | 中 | 低 のいずれか",
-      "relevance": "そのニュースが工場・倉庫・畜舎・学校など大型施設の塗装・改修にどう結びつくか・なぜ今アクセスが取れるか（100字以内）",
+      "relevance": "そのニュースが対象ドメインの塗装・改修にどう結びつくか・なぜ今アクセスが取れるか（100字以内）",
       "suggestedH2": "そのKWで書く記事の切り口・H2案（1行）",
       "sourceTitle": "根拠にしたニュースのタイトル（分かる範囲で）",
       "sourceUrl": "根拠にしたニュースのURL（分かる範囲で）"
@@ -442,12 +448,12 @@ export async function generateTrendKeywords(options?: {
       ? options.useGrounding
       : true;
 
-  const prompt = `あなたは「${KEYWORD_DOMAIN}」を扱う専門メディアのSEO編集者です。
+  const prompt = `あなたは「${keywordDomain()}」を扱う専門メディアのSEO編集者です。
 ${
     useGrounding
       ? "Google検索を使って、"
       : ""
-  }いま世の中で話題になっている最近のニュース・時事トピックのうち、工場・倉庫・畜舎・学校など大型施設のオーナー／施設管理・総務担当者／経営者にとって「塗装・改修・費用・省エネ・法制度・トラブル回避」の観点で関心が高まりうるものを特定し、それをフックに記事化すべき検索キーワードを提案してください。
+  }いま世の中で話題になっている最近のニュース・時事トピックのうち、${getCurrentFacilityCategory().audience}にとって「塗装・改修・費用・省エネ・法制度・トラブル回避」の観点で関心が高まりうるものを特定し、それをフックに記事化すべき検索キーワードを提案してください。
 
 # 狙うべき時事の切り口（例）
 - 資材・価格: ナフサ・原油高による塗料/建材の価格高騰 → 塗装・改修費の値上がり・早期実施の判断
@@ -457,7 +463,7 @@ ${
 
 # 重要ルール（厳守）
 - できるだけ「最近（直近数か月〜1年程度）」の実際のニュース・動向を根拠にすること
-- 各キーワードは必ず${KEYWORD_DOMAIN}の文脈に結びつけること
+- 各キーワードは必ず${keywordDomain()}の文脈に結びつけること
 - ニュースの話題そのもの（例: 事件名）ではなく、ユーザーが実際に検索する「対策・費用・方法」寄りのキーワードにすること
 - 根拠にしたニュースの出典（タイトル・URL）を分かる範囲で記載すること
 - 8〜12個を出す

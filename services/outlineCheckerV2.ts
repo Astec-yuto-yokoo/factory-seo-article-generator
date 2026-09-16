@@ -1,6 +1,7 @@
 // 構成チェックエージェント Ver.2
 // 生成された構成案の品質チェックと自動修正
 
+import { getCurrentFacilityCategory } from './facilityCategoryConfig';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { callGeminiWithRetry } from "./geminiRetry";
 // latestAIModelsは汎用化のため削除
@@ -301,7 +302,7 @@ export function checkOutline(
           message: `まとめの直前に「自社サービス訴求」H2がありません（現在: 「${serviceSection.heading}」）。まとめの直前に${serviceName}の提供価値を訴求するH2（H3を2〜3個）を追加してください。`,
           severity: 'error'
         });
-        suggestions.push(`例: 「${serviceName}の工場向け遮熱塗装という選択肢」（H3: 製品・技術の強み / 提携施工店による施工体制 / 診断・アフターフォロー）`);
+        suggestions.push(`例: 「${getCurrentFacilityCategory().serviceH2Example}」（H3: 製品・技術の強み / 提携施工店による施工体制 / 診断・アフターフォロー）`);
       } else if (looksLikeService) {
         // 訴求章はあるがH3数が規定外
         const h3n = serviceSection.subheadings ? serviceSection.subheadings.length : 0;

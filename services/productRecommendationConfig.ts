@@ -5,6 +5,8 @@
  * 執筆プロンプトに注入し、自然な形で製品紹介を行う。
  */
 
+import { getCurrentFacilityCategoryId, type FacilityCategoryId } from "./facilityCategoryConfig";
+
 // 製品情報の型定義
 interface ProductInfo {
   /** 製品正式名称 */
@@ -31,6 +33,8 @@ interface ThemeProductMapping {
   products: ProductInfo[];
   /** このテーマ固有の執筆補足指示（任意） */
   writingNote?: string;
+  /** 施設カテゴリ固有の補足（複数テーマにマッチしても1回だけ出力） */
+  categoryNote?: string;
 }
 
 // ===== 製品マスタ =====
@@ -193,6 +197,34 @@ const PRODUCT_RAS_TREINT: ProductInfo = {
   lifespan: "上塗材の耐用年数に準ずる",
 };
 
+const PRODUCT_SHANETSU_TECH_II: ProductInfo = {
+  name: "シャネツテックⅡSi-JY",
+  description: "コストと遮熱・耐候性のバランスに優れた弱溶剤形二液屋根用遮熱シリコン塗料（低コスト志向の店舗・多店舗一括発注で採用が多い）",
+  url: "https://astecpaints.jp/products/detail/54",
+  target: "カラー鋼板・ガルバリウム鋼板・ステンレス・アルミなど金属屋根、波形スレート、カラーベスト、セメント瓦",
+  specs: [
+    "遮熱顔料＋熱放射セラミックで近赤外線を反射し屋根温度上昇を抑制",
+    "16色がJIS K 5675 日射反射率試験に合格（屋根専用20色）",
+    "ラジカル制御型白色顔料＋HALSで紫外線劣化を抑制、促進耐候性試験で16〜20年相当",
+    "汎用シリコン塗料と同等の施工性で低コスト",
+  ],
+  lifespan: "13〜16年",
+};
+
+const PRODUCT_EPITECH_FILLER: ProductInfo = {
+  name: "エピテックフィラーAEⅡ",
+  description: "RC造・モルタル・ALC外壁の改修に使う水性形一液エポキシ系可とう形（微弾性）下地調整材。ひび割れに追従し防水性を高める",
+  url: "https://astecpaints.jp/products/detail/67",
+  target: "RC造（コンクリート）・モルタル・ALC・窯業系サイディングの外壁（学校・病院・老健施設・宿泊施設の改修）",
+  specs: [
+    "エポキシ結合の強靭な塗膜で耐久性・防水性に優れる",
+    "微弾性（可とう形）でヘアクラックに追従し、ひび割れの再発を抑える",
+    "JIS A 6909（可とう形改修用仕上塗材）の全性能項目に合格",
+    "劣化した旧塗膜への付着力・伸長性が高く改修用に適する",
+  ],
+  lifespan: "上塗材の耐用年数に準ずる",
+};
+
 // ===== テーマ別マッピング =====
 
 const THEME_PRODUCT_MAPPINGS: ThemeProductMapping[] = [
@@ -268,7 +300,120 @@ const THEME_PRODUCT_MAPPINGS: ThemeProductMapping[] = [
     products: [PRODUCT_SHANETSU_TOP_ONE],
     writingNote: "シャネツトップワンの下塗り不要による低コスト性（約1,400円/m2〜）と短工期（1,000m2で10〜12日）を予算消化の文脈で訴求。",
   },
+  {
+    themeName: "RC造外壁の改修・ひび割れ補修（施設）",
+    keywords: ["rc造", "rc 外壁", "鉄筋コンクリート", "ひび割れ", "クラック", "爆裂", "外壁 補修", "下地補修", "長寿命化", "陸屋根", "学校 外壁", "病院 外壁", "老人ホーム 外壁"],
+    products: [PRODUCT_EPITECH_FILLER, PRODUCT_MUKI_REVO1000_IR, PRODUCT_REFINE_1000MF_IR],
+    writingNote: "RC造外壁は下地補修が仕上がりと寿命を決める。エピテックフィラーAEⅡ（微弾性下地調整材）でひび割れに追従させ、上塗りは足場代を無駄にしない高耐候の無機REVO1000-IR／リファイン1000MF-IRを推薦。陸屋根防水（ウレタン塗膜防水等）との同時計画にも言及。",
+  },
 ];
+
+// ===== 施設カテゴリ別の製品優先順位オーバーライド =====
+// 店舗: 低コスト志向でシャネツテックⅡSi-JYの採用が多い（トップワンは店舗では非採用・Loopヒアリング）
+// 畜舎: 牛舎記事（astec-factory.com/info/2026/03/10/gyusha-heat/）に合わせリファイン500Si-IR/500MF-IRを優先
+// 施設: RC造・陸屋根が中心のため折板屋根用トップワンを外し、外壁高耐候＋エピテックフィラーを優先
+
+// 屋根遮熱・暑さ系テーマ（カテゴリ固有の writingNote に差し替える対象）
+const ROOF_HEAT_THEMES = [
+  "折板屋根の遮熱・塗装",
+  "屋根の遮熱塗装（一般）",
+  "暑さ対策・熱中症対策",
+  "省エネ・コスト削減",
+  "屋根塗装（一般・改修）",
+  "予算消化・修繕費用",
+];
+
+/** writingNote からトップワンに言及する文（。区切り）を取り除く */
+function stripTopOneSentences(note: string | undefined): string {
+  if (!note) return "";
+  return note
+    .split("。")
+    .filter((sentence) => sentence.indexOf("トップワン") === -1 && sentence.indexOf("下塗り不要") === -1 && sentence.trim() !== "")
+    .map((sentence) => sentence + "。")
+    .join("");
+}
+
+/** 製品リスト内のトップワンを置換（replacement が null なら除去）し、重複を排除する */
+function swapTopOne(products: ProductInfo[], replacement: ProductInfo | null): ProductInfo[] {
+  const result: ProductInfo[] = [];
+  const seen = new Set<string>();
+  for (const p of products) {
+    const candidate = p.name === PRODUCT_SHANETSU_TOP_ONE.name ? replacement : p;
+    if (!candidate) continue;
+    if (seen.has(candidate.name)) continue;
+    seen.add(candidate.name);
+    result.push(candidate);
+  }
+  return result;
+}
+
+
+function applyCategoryOverride(theme: ThemeProductMapping, categoryId: FacilityCategoryId): ThemeProductMapping {
+  if (categoryId === "factory") return theme;
+  const isRoofHeatTheme = ROOF_HEAT_THEMES.indexOf(theme.themeName) !== -1;
+
+  if (categoryId === "store") {
+    // 全テーマでトップワン→シャネツテックⅡに置換
+    const products = swapTopOne(theme.products, PRODUCT_SHANETSU_TECH_II);
+    if (!isRoofHeatTheme) {
+      return { themeName: theme.themeName, keywords: theme.keywords, products, writingNote: stripTopOneSentences(theme.writingNote) || undefined };
+    }
+    // 屋根遮熱・暑さ系はシャネツテックⅡを先頭に
+    const ordered = [PRODUCT_SHANETSU_TECH_II].concat(products.filter((p) => p.name !== PRODUCT_SHANETSU_TECH_II.name));
+    return {
+      themeName: theme.themeName,
+      keywords: theme.keywords,
+      products: ordered,
+      categoryNote: "店舗（折板屋根1,000〜2,000㎡）ではコストバランスに優れるシャネツテックⅡSi-JYを第一候補として推薦。効果は室温ではなく空調電力コスト・CO2削減の投資回収として説明する。",
+      writingNote: stripTopOneSentences(theme.writingNote) || undefined,
+    };
+  }
+
+  if (categoryId === "livestock") {
+    const products = swapTopOne(theme.products, PRODUCT_REFINE_500SI_IR);
+    if (!isRoofHeatTheme) {
+      return { themeName: theme.themeName, keywords: theme.keywords, products, writingNote: stripTopOneSentences(theme.writingNote) || undefined };
+    }
+    const rest = products.filter((p) => p.name !== PRODUCT_REFINE_500SI_IR.name && p.name !== PRODUCT_REFINE_500MF_IR.name);
+    return {
+      themeName: theme.themeName,
+      keywords: theme.keywords,
+      products: [PRODUCT_REFINE_500SI_IR, PRODUCT_REFINE_500MF_IR].concat(rest),
+      categoryNote: "畜舎屋根には超低汚染リファイン500Si-IR（コスト重視）／500MF-IR（長寿命重視）を推薦。屋根表面温度 最大18.6℃・屋根裏6.1℃低減（自社試験）を家畜の暑熱ストレス軽減の文脈で説明する。",
+      writingNote: stripTopOneSentences(theme.writingNote) || undefined,
+    };
+  }
+
+  // facility
+  if (theme.themeName === "外壁塗装（工場・倉庫）") {
+    return {
+      themeName: "外壁塗装（施設・RC造）",
+      keywords: theme.keywords,
+      products: [PRODUCT_EPITECH_FILLER, PRODUCT_MUKI_REVO1000_IR, PRODUCT_REFINE_1000MF_IR],
+      writingNote: "RC造外壁はエピテックフィラーAEⅡで下地調整し、足場代を無駄にしない高耐候の無機REVO1000-IR／リファイン1000MF-IRで長寿命化する流れで説明する。",
+    };
+  }
+  const products = swapTopOne(theme.products, null);
+  if (!isRoofHeatTheme) {
+    return {
+      themeName: theme.themeName,
+      keywords: theme.keywords,
+      products: products.length > 0 ? products : [PRODUCT_RAS_TREINT],
+      writingNote: stripTopOneSentences(theme.writingNote) || undefined,
+    };
+  }
+  return {
+    themeName: theme.themeName,
+    keywords: theme.keywords,
+    products: products.length > 0 ? products : [PRODUCT_REFINE_500MF_IR, PRODUCT_FLUORINE_REVO500_IR],
+    categoryNote: "施設はRC造・陸屋根が中心のため、折板屋根前提の製品訴求は避ける。体育館（瓦棒屋根）や金属屋根部分に限って高耐候の遮熱塗料を提案し、陸屋根は防水改修と組み合わせて説明する。",
+      writingNote: stripTopOneSentences(theme.writingNote) || undefined,
+  };
+}
+
+function getThemeMappings(categoryId: FacilityCategoryId): ThemeProductMapping[] {
+  return THEME_PRODUCT_MAPPINGS.map((t) => applyCategoryOverride(t, categoryId));
+}
 
 /**
  * キーワードと構成案からマッチするテーマを判定し、
@@ -276,11 +421,13 @@ const THEME_PRODUCT_MAPPINGS: ThemeProductMapping[] = [
  */
 export function buildProductRecommendationText(keyword: string, outline: string): string {
   const combinedText = (keyword + " " + outline).toLowerCase();
+  const categoryId = getCurrentFacilityCategoryId();
+  const themeMappings = getThemeMappings(categoryId);
 
   // マッチしたテーマを収集（スコア順）
   const matchedThemes: Array<{ theme: ThemeProductMapping; score: number }> = [];
 
-  for (const theme of THEME_PRODUCT_MAPPINGS) {
+  for (const theme of themeMappings) {
     let score = 0;
     for (const kw of theme.keywords) {
       // スペース区切りのキーワードは全単語がテキストに含まれているかチェック
@@ -316,8 +463,12 @@ export function buildProductRecommendationText(keyword: string, outline: string)
   const productEntries: string[] = [];
   const writingNotes: string[] = [];
 
+  let categoryNoteText = "";
   for (const { theme } of selectedThemes) {
-    if (theme.writingNote) {
+    if (theme.categoryNote && !categoryNoteText) {
+      categoryNoteText = "- " + theme.categoryNote;
+    }
+    if (theme.writingNote && writingNotes.indexOf("- " + theme.writingNote) === -1) {
       writingNotes.push("- " + theme.writingNote);
     }
     for (const product of theme.products) {
@@ -338,8 +489,10 @@ export function buildProductRecommendationText(keyword: string, outline: string)
   }
 
   const productListText = productEntries.join("\n\n");
-  const writingNoteText = writingNotes.length > 0
-    ? "\n■ テーマ別の訴求ポイント:\n" + writingNotes.join("\n")
+  const firstProductName = selectedThemes[0].theme.products.length > 0 ? selectedThemes[0].theme.products[0].name : "シャネツトップワンSi-JY";
+  const allNotes = (categoryNoteText ? [categoryNoteText] : []).concat(writingNotes);
+  const writingNoteText = allNotes.length > 0
+    ? "\n■ テーマ別の訴求ポイント:\n" + allNotes.join("\n")
     : "";
 
   return `
@@ -347,7 +500,7 @@ export function buildProductRecommendationText(keyword: string, outline: string)
 この記事のテーマに関連するアステックペイントの製品があります。記事内で自然な形で具体的な製品名とスペックに言及し、競合記事にはない独自性を出してください。
 
 ■ 挿入ルール：
-1. 製品名は正式名称で記載すること（例：「シャネツトップワンSi-JY」）
+1. 製品名は正式名称で記載すること（例：「${firstProductName}」）
 2. 性能スペック（温度低減値、耐用年数、伸縮率など）は具体的な数値で記載
 3. 押し売り的にならないよう、読者の課題解決の文脈で自然に紹介する
 4. 自社サービス訴求のH2セクションでは積極的に製品名を出してよい
