@@ -164,7 +164,7 @@ Gemini APIキーをブラウザに露出させない。実キーは**サーバ�
 - 進捗が何もなくキーワードも空の場合は保存済みセッションを削除する（リセット後の空データ再保存防止）。容量超過時は競合調査結果を除いて再保存する
 - **UI**: ヘッダーの「作業をリセット」ボタン（`handleResetSession`、confirm あり）で state と保存データを初期化。復元時はヘッダー下に「○時点の作業状態を復元しました」バナーを表示
 - 記事ドラフトの自動保存（`ArticleWriter.tsx` の `articleWriter_draft_*`）・施設カテゴリ（`facilityCategory`）とは別キーで共存する
-- 姉妹プロジェクト（apaman / zeenb）にも同様の移植が望ましい（未反映）
+- 3プロジェクト共通反映対象（apaman / zeenb / factory）— 各プロジェクトの localStorage キーは `apamanSeoSession_v1` / `zeenbSeoSession_v1` / `factorySeoSession_v1`
 
 ## 見出し番号付与ルール（絶対厳守）
 
