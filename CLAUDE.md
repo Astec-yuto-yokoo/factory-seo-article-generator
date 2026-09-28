@@ -377,6 +377,15 @@ ADC認証が失敗する場合: `gcloud auth application-default login --force`
 - 両関数とも冪等性あり（既にブロック構造の場合も正しく処理）
 - クリーンアップ処理（`cleanupArticleContent`）内で順に呼び出される
 
+## FAQPage 構造化データ（WordPress自動入稿時に付与）
+
+- `POST /api/wordpress/create-post`（`scraping-server.js` / `scraping-server-full.js`）が送信直前に `server/api/faq-schema.js` の `appendFaqSchema()` を通し、FAQ/よくある質問H2配下のH3＋回答から FAQPage JSON-LD を `<!-- wp:html -->` ブロックで本文末尾に追加する
+- 質問文の見出し番号（`5-1. `）と回答内の `<small>` 出典注釈は除去。既に `"@type":"FAQPage"` を含む本文には二重付与しない（冪等）
+- `<script>` を残すには入稿ユーザーに `unfiltered_html` 権限が必要（factory は administrator で確認済み）
+- 画面表示・HTMLコピー用はフロントの `utils/faqSchemaGenerator.ts`（別実装）。抽出ルールを変える場合は両方を揃えること
+- SEOプラグインの FAQ ブロック等で FAQPage を追加しない（二重になる）
+- 3プロジェクト共通反映対象（apaman / zeenb / factory）
+
 ## テーブル生成ルール
 
 - Markdown記法（`|` や `---`）は禁止。必ず `<table>` HTMLで出力
