@@ -412,15 +412,24 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
         // 一時的に保存（チェック後にクリーンアップするため）
         console.log("✅ Ver.3生成完了（Grounding機能使用）");
 
-        // 品質チェックも実行
-        const checkResult = await checkArticleV3({
-          article: v3Result,
-          outline: outlineMarkdown,
-          keyword: keyword,
-        });
-
-        console.log(`📊 品質スコア: ${checkResult.overallScore}/100`);
-        console.log("📝 改善提案:", checkResult.improvements);
+        // 品質チェックも実行（参考ログのみ・非致命）
+        // 執筆（Claude）は既に完了しているため、チェック（Gemini）が通信断や
+        // タイムアウトで失敗しても記事を破棄しない。失敗時は警告ログだけ残して続行する。
+        setGenerationProgress("記事の品質チェック中...");
+        try {
+          const checkResult = await checkArticleV3({
+            article: v3Result,
+            outline: outlineMarkdown,
+            keyword: keyword,
+          });
+          console.log(`📊 品質スコア: ${checkResult.overallScore}/100`);
+          console.log("📝 改善提案:", checkResult.improvements);
+        } catch (checkError) {
+          console.warn(
+            "⚠️ 品質チェックに失敗しましたが、執筆済みの記事はそのまま採用します:",
+            checkError instanceof Error ? checkError.message : checkError
+          );
+        }
 
         // クリーンアップ処理を実行（V3は既にHTMLなのでMarkdown→HTML変換は不要）
         const cleanedContent = cleanupArticleContent(v3Result);
