@@ -30,14 +30,23 @@ export async function callGeminiWithRetry<T>(
     } catch (err: any) {
       lastError = err;
       const msg = err && err.message ? String(err.message) : String(err);
+      // 402（プリペイド残高切れ）・401/403（キー無効）は再試行しても回復しないため即座に失敗させる
+      const isNonRecoverable =
+        msg.indexOf('402') !== -1 ||
+        msg.indexOf('Payment Required') !== -1 ||
+        msg.indexOf('credits are depleted') !== -1 ||
+        msg.indexOf('[401') !== -1 ||
+        msg.indexOf('[403') !== -1 ||
+        msg.indexOf('API key not valid') !== -1;
       const isRetryable =
+        !isNonRecoverable && (
         msg.indexOf('503') !== -1 ||
         msg.indexOf('429') !== -1 ||
         msg.indexOf('overloaded') !== -1 ||
         msg.indexOf('high demand') !== -1 ||
         msg.indexOf('UNAVAILABLE') !== -1 ||
         msg.indexOf('RESOURCE_EXHAUSTED') !== -1 ||
-        msg.toLowerCase().indexOf('fetch') !== -1;
+        msg.toLowerCase().indexOf('fetch') !== -1);
       if (!isRetryable || attempt === maxRetries) {
         break;
       }
