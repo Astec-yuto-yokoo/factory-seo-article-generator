@@ -60,10 +60,17 @@ import {
   SESSION_MAX_AGE_HOURS,
   type PersistedSession,
 } from "./utils/sessionPersistence";
+import {
+  isGeminiCreditDepletedError,
+  GEMINI_CREDIT_DEPLETED_MESSAGE,
+} from "./utils/geminiErrors";
 
 // 競合調査で発生したサーバー系エラー（内部コード RENDER_RESTART_REQUIRED / RENDER_SERVER_DOWN）を
 // 利用者向けの文言に変換する。内部コードはキュー実行の復旧判定で使うため、Error の message 自体は変えない。
 function toUserFacingAnalysisError(err: unknown): string {
+  if (isGeminiCreditDepletedError(err)) {
+    return GEMINI_CREDIT_DEPLETED_MESSAGE;
+  }
   const message = err instanceof Error ? err.message : "";
   if (!message) {
     return "分析中にエラーが発生しました。しばらくしてからもう一度お試しください。";
@@ -169,7 +176,9 @@ const App: React.FC = () => {
       const result = await generateTrendKeywords({ useGrounding: true });
       setTrendKeywords(result);
     } catch (err: any) {
-      const message = err && err.message ? err.message : String(err);
+      const message = isGeminiCreditDepletedError(err)
+        ? GEMINI_CREDIT_DEPLETED_MESSAGE
+        : err && err.message ? err.message : String(err);
       setError(message);
     } finally {
       setIsGeneratingTrendKeywords(false);
@@ -191,7 +200,9 @@ const App: React.FC = () => {
       );
       setStrategicKeywords(result);
     } catch (err: any) {
-      const message = err && err.message ? err.message : String(err);
+      const message = isGeminiCreditDepletedError(err)
+        ? GEMINI_CREDIT_DEPLETED_MESSAGE
+        : err && err.message ? err.message : String(err);
       setError(message);
     } finally {
       setIsGeneratingStrategicKeywords(false);
@@ -1062,7 +1073,9 @@ const App: React.FC = () => {
           });
         }
         setError(
-          err instanceof Error
+          isGeminiCreditDepletedError(err)
+            ? GEMINI_CREDIT_DEPLETED_MESSAGE
+            : err instanceof Error
             ? err.message
             : "フル自動実行中にエラーが発生しました。"
         );
@@ -1769,6 +1782,9 @@ const App: React.FC = () => {
                 onGenerate={handleGenerateTrendKeywords}
                 onUseKeyword={handleUseKeywordForArticle}
               />
+
+              {/* キーワード選定モードのエラー（402残高切れ等）。記事作成モード側の表示はこのモードでは描画されない */}
+              {error && <ErrorMessage message={error} />}
             </div>
           )}
 
